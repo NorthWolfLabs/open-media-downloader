@@ -1,0 +1,23 @@
+[package]
+name = "omd-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+schemars.workspace = true
+omd-domain = { path = "../omd-domain" }
+omd-store = { path = "../omd-store" }
+omd-files = { path = "../omd-files" }
+tokio.workspace = true
+tokio-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+sha2.workspace = true
+hex.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

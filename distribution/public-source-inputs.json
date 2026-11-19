@@ -1,0 +1,1260 @@
+{
+  "format": 2,
+  "files": [
+    {
+      "source": ".agents/skills/omd-plugin-authoring/SKILL.md",
+      "destination": ".agents/skills/omd-plugin-authoring/SKILL.md"
+    },
+    {
+      "source": ".github/workflows/ci.yml",
+      "destination": ".github/workflows/ci.yml"
+    },
+    {
+      "source": ".gitignore",
+      "destination": ".gitignore"
+    },
+    {
+      "source": ".node-version",
+      "destination": ".node-version"
+    },
+    {
+      "source": "AGENTS.md",
+      "destination": "AGENTS.md"
+    },
+    {
+      "source": "Cargo.lock",
+      "destination": "Cargo.lock"
+    },
+    {
+      "source": "Cargo.toml",
+      "destination": "Cargo.toml"
+    },
+    {
+      "source": "LICENSE",
+      "destination": "LICENSE"
+    },
+    {
+      "source": "README.md",
+      "destination": "README.md"
+    },
+    {
+      "source": "adapters/browser/LICENSE",
+      "destination": "adapters/browser/LICENSE"
+    },
+    {
+      "source": "adapters/browser/adapter.mjs",
+      "destination": "adapters/browser/adapter.mjs"
+    },
+    {
+      "source": "adapters/browser/package-lock.json",
+      "destination": "adapters/browser/package-lock.json"
+    },
+    {
+      "source": "adapters/browser/package.json",
+      "destination": "adapters/browser/package.json"
+    },
+    {
+      "source": "adapters/browser/protocol.mjs",
+      "destination": "adapters/browser/protocol.mjs"
+    },
+    {
+      "source": "adapters/browser/test/protocol.test.mjs",
+      "destination": "adapters/browser/test/protocol.test.mjs"
+    },
+    {
+      "source": "crates/omd-acquisition/Cargo.toml",
+      "destination": "crates/omd-acquisition/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-acquisition/src/lib.rs",
+      "destination": "crates/omd-acquisition/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-acquisition/src/media_progress.rs",
+      "destination": "crates/omd-acquisition/src/media_progress.rs"
+    },
+    {
+      "source": "crates/omd-browser/Cargo.toml",
+      "destination": "crates/omd-browser/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-browser/src/lib.rs",
+      "destination": "crates/omd-browser/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-browser/src/packages.rs",
+      "destination": "crates/omd-browser/src/packages.rs"
+    },
+    {
+      "source": "crates/omd-browser/tests/authentication.rs",
+      "destination": "crates/omd-browser/tests/authentication.rs"
+    },
+    {
+      "source": "crates/omd-browser/tests/packages.rs",
+      "destination": "crates/omd-browser/tests/packages.rs"
+    },
+    {
+      "source": "crates/omd-cli/Cargo.toml",
+      "destination": "crates/omd-cli/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-cli/src/main.rs",
+      "destination": "crates/omd-cli/src/main.rs"
+    },
+    {
+      "source": "crates/omd-component-snapshot/Cargo.toml",
+      "destination": "crates/omd-component-snapshot/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-component-snapshot/src/lib.rs",
+      "destination": "crates/omd-component-snapshot/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-component-snapshot/src/main.rs",
+      "destination": "crates/omd-component-snapshot/src/main.rs"
+    },
+    {
+      "source": "crates/omd-credentials/Cargo.toml",
+      "destination": "crates/omd-credentials/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-credentials/src/chunked.rs",
+      "destination": "crates/omd-credentials/src/chunked.rs"
+    },
+    {
+      "source": "crates/omd-credentials/src/lib.rs",
+      "destination": "crates/omd-credentials/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-credentials/src/linux.rs",
+      "destination": "crates/omd-credentials/src/linux.rs"
+    },
+    {
+      "source": "crates/omd-credentials/src/windows.rs",
+      "destination": "crates/omd-credentials/src/windows.rs"
+    },
+    {
+      "source": "crates/omd-domain/Cargo.toml",
+      "destination": "crates/omd-domain/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-domain/src/bin/omd-schema.rs",
+      "destination": "crates/omd-domain/src/bin/omd-schema.rs"
+    },
+    {
+      "source": "crates/omd-domain/src/discovery.rs",
+      "destination": "crates/omd-domain/src/discovery.rs"
+    },
+    {
+      "source": "crates/omd-domain/src/lib.rs",
+      "destination": "crates/omd-domain/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-domain/src/presentation.rs",
+      "destination": "crates/omd-domain/src/presentation.rs"
+    },
+    {
+      "source": "crates/omd-files/Cargo.toml",
+      "destination": "crates/omd-files/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-files/src/lib.rs",
+      "destination": "crates/omd-files/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-files/src/windows_private.rs",
+      "destination": "crates/omd-files/src/windows_private.rs"
+    },
+    {
+      "source": "crates/omd-helper-broker/Cargo.toml",
+      "destination": "crates/omd-helper-broker/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-helper-broker/src/lib.rs",
+      "destination": "crates/omd-helper-broker/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-helper-broker/tests/proxy.rs",
+      "destination": "crates/omd-helper-broker/tests/proxy.rs"
+    },
+    {
+      "source": "crates/omd-isolation/Cargo.toml",
+      "destination": "crates/omd-isolation/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-isolation/src/bin/omd-helper-guardian.rs",
+      "destination": "crates/omd-isolation/src/bin/omd-helper-guardian.rs"
+    },
+    {
+      "source": "crates/omd-isolation/src/bin/omd-isolation-probe.rs",
+      "destination": "crates/omd-isolation/src/bin/omd-isolation-probe.rs"
+    },
+    {
+      "source": "crates/omd-isolation/src/lib.rs",
+      "destination": "crates/omd-isolation/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-isolation/src/linux.rs",
+      "destination": "crates/omd-isolation/src/linux.rs"
+    },
+    {
+      "source": "crates/omd-isolation/src/linux_budget.rs",
+      "destination": "crates/omd-isolation/src/linux_budget.rs"
+    },
+    {
+      "source": "crates/omd-isolation/src/macos_budget.rs",
+      "destination": "crates/omd-isolation/src/macos_budget.rs"
+    },
+    {
+      "source": "crates/omd-isolation/src/session.rs",
+      "destination": "crates/omd-isolation/src/session.rs"
+    },
+    {
+      "source": "crates/omd-isolation/src/windows.rs",
+      "destination": "crates/omd-isolation/src/windows.rs"
+    },
+    {
+      "source": "crates/omd-isolation/src/windows_job.rs",
+      "destination": "crates/omd-isolation/src/windows_job.rs"
+    },
+    {
+      "source": "crates/omd-isolation/src/windows_profiles.rs",
+      "destination": "crates/omd-isolation/src/windows_profiles.rs"
+    },
+    {
+      "source": "crates/omd-isolation/tests/browser_confinement.rs",
+      "destination": "crates/omd-isolation/tests/browser_confinement.rs"
+    },
+    {
+      "source": "crates/omd-isolation/tests/confinement.rs",
+      "destination": "crates/omd-isolation/tests/confinement.rs"
+    },
+    {
+      "source": "crates/omd-isolation/tests/session.rs",
+      "destination": "crates/omd-isolation/tests/session.rs"
+    },
+    {
+      "source": "crates/omd-isolation/tests/windows_confinement.rs",
+      "destination": "crates/omd-isolation/tests/windows_confinement.rs"
+    },
+    {
+      "source": "crates/omd-lifecycle/Cargo.toml",
+      "destination": "crates/omd-lifecycle/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-lifecycle/src/lib.rs",
+      "destination": "crates/omd-lifecycle/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-mcp/Cargo.toml",
+      "destination": "crates/omd-mcp/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-mcp/src/coverage.json",
+      "destination": "crates/omd-mcp/src/coverage.json"
+    },
+    {
+      "source": "crates/omd-mcp/src/knowledge.rs",
+      "destination": "crates/omd-mcp/src/knowledge.rs"
+    },
+    {
+      "source": "crates/omd-mcp/src/main.rs",
+      "destination": "crates/omd-mcp/src/main.rs"
+    },
+    {
+      "source": "crates/omd-mcp/src/routes.json",
+      "destination": "crates/omd-mcp/src/routes.json"
+    },
+    {
+      "source": "crates/omd-mcp/src/tools.json",
+      "destination": "crates/omd-mcp/src/tools.json"
+    },
+    {
+      "source": "crates/omd-mcp/src/transport.rs",
+      "destination": "crates/omd-mcp/src/transport.rs"
+    },
+    {
+      "source": "crates/omd-media/Cargo.toml",
+      "destination": "crates/omd-media/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-media/examples/probe.rs",
+      "destination": "crates/omd-media/examples/probe.rs"
+    },
+    {
+      "source": "crates/omd-media/src/bin/omd-media-probe.rs",
+      "destination": "crates/omd-media/src/bin/omd-media-probe.rs"
+    },
+    {
+      "source": "crates/omd-media/src/container.rs",
+      "destination": "crates/omd-media/src/container.rs"
+    },
+    {
+      "source": "crates/omd-media/src/lib.rs",
+      "destination": "crates/omd-media/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-media/tests/authenticated.rs",
+      "destination": "crates/omd-media/tests/authenticated.rs"
+    },
+    {
+      "source": "crates/omd-media/tests/cover_art.rs",
+      "destination": "crates/omd-media/tests/cover_art.rs"
+    },
+    {
+      "source": "crates/omd-media/tests/direct_media.rs",
+      "destination": "crates/omd-media/tests/direct_media.rs"
+    },
+    {
+      "source": "crates/omd-media/tests/live.rs",
+      "destination": "crates/omd-media/tests/live.rs"
+    },
+    {
+      "source": "crates/omd-network/Cargo.toml",
+      "destination": "crates/omd-network/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-network/src/lib.rs",
+      "destination": "crates/omd-network/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-notifications/Cargo.toml",
+      "destination": "crates/omd-notifications/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-notifications/src/bin/omd-notify.rs",
+      "destination": "crates/omd-notifications/src/bin/omd-notify.rs"
+    },
+    {
+      "source": "crates/omd-notifications/src/lib.rs",
+      "destination": "crates/omd-notifications/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-plugin-worker/Cargo.toml",
+      "destination": "crates/omd-plugin-worker/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-plugin-worker/src/main.rs",
+      "destination": "crates/omd-plugin-worker/src/main.rs"
+    },
+    {
+      "source": "crates/omd-plugin-worker/tests/component.rs",
+      "destination": "crates/omd-plugin-worker/tests/component.rs"
+    },
+    {
+      "source": "crates/omd-plugins/Cargo.toml",
+      "destination": "crates/omd-plugins/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-plugins/src/authority.rs",
+      "destination": "crates/omd-plugins/src/authority.rs"
+    },
+    {
+      "source": "crates/omd-plugins/src/http_cache.rs",
+      "destination": "crates/omd-plugins/src/http_cache.rs"
+    },
+    {
+      "source": "crates/omd-plugins/src/lib.rs",
+      "destination": "crates/omd-plugins/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-plugins/tests/browser.rs",
+      "destination": "crates/omd-plugins/tests/browser.rs"
+    },
+    {
+      "source": "crates/omd-plugins/tests/cancellation.rs",
+      "destination": "crates/omd-plugins/tests/cancellation.rs"
+    },
+    {
+      "source": "crates/omd-service/Cargo.toml",
+      "destination": "crates/omd-service/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-service/src/bin/omd-openapi.rs",
+      "destination": "crates/omd-service/src/bin/omd-openapi.rs"
+    },
+    {
+      "source": "crates/omd-service/src/browsers.rs",
+      "destination": "crates/omd-service/src/browsers.rs"
+    },
+    {
+      "source": "crates/omd-service/src/catalog.rs",
+      "destination": "crates/omd-service/src/catalog.rs"
+    },
+    {
+      "source": "crates/omd-service/src/checks.rs",
+      "destination": "crates/omd-service/src/checks.rs"
+    },
+    {
+      "source": "crates/omd-service/src/contract/mod.rs",
+      "destination": "crates/omd-service/src/contract/mod.rs"
+    },
+    {
+      "source": "crates/omd-service/src/contract/models.rs",
+      "destination": "crates/omd-service/src/contract/models.rs"
+    },
+    {
+      "source": "crates/omd-service/src/identity.rs",
+      "destination": "crates/omd-service/src/identity.rs"
+    },
+    {
+      "source": "crates/omd-service/src/lib.rs",
+      "destination": "crates/omd-service/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-service/src/main.rs",
+      "destination": "crates/omd-service/src/main.rs"
+    },
+    {
+      "source": "crates/omd-service/src/maintenance.rs",
+      "destination": "crates/omd-service/src/maintenance.rs"
+    },
+    {
+      "source": "crates/omd-service/src/native_sign_in.rs",
+      "destination": "crates/omd-service/src/native_sign_in.rs"
+    },
+    {
+      "source": "crates/omd-service/src/notifications.rs",
+      "destination": "crates/omd-service/src/notifications.rs"
+    },
+    {
+      "source": "crates/omd-service/src/presentation.rs",
+      "destination": "crates/omd-service/src/presentation.rs"
+    },
+    {
+      "source": "crates/omd-service/src/selections.rs",
+      "destination": "crates/omd-service/src/selections.rs"
+    },
+    {
+      "source": "crates/omd-service/src/source_removals.rs",
+      "destination": "crates/omd-service/src/source_removals.rs"
+    },
+    {
+      "source": "crates/omd-service/src/storage.rs",
+      "destination": "crates/omd-service/src/storage.rs"
+    },
+    {
+      "source": "crates/omd-service/src/tools.rs",
+      "destination": "crates/omd-service/src/tools.rs"
+    },
+    {
+      "source": "crates/omd-service/src/update.rs",
+      "destination": "crates/omd-service/src/update.rs"
+    },
+    {
+      "source": "crates/omd-service/tests/api.rs",
+      "destination": "crates/omd-service/tests/api.rs"
+    },
+    {
+      "source": "crates/omd-service/tests/browser_auth.rs",
+      "destination": "crates/omd-service/tests/browser_auth.rs"
+    },
+    {
+      "source": "crates/omd-service/tests/engine_exit.rs",
+      "destination": "crates/omd-service/tests/engine_exit.rs"
+    },
+    {
+      "source": "crates/omd-service/tests/native_sign_in.rs",
+      "destination": "crates/omd-service/tests/native_sign_in.rs"
+    },
+    {
+      "source": "crates/omd-signin/Cargo.toml",
+      "destination": "crates/omd-signin/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-signin/src/lib.rs",
+      "destination": "crates/omd-signin/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-signin/src/main.rs",
+      "destination": "crates/omd-signin/src/main.rs"
+    },
+    {
+      "source": "crates/omd-storage/Cargo.toml",
+      "destination": "crates/omd-storage/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-storage/src/checks.rs",
+      "destination": "crates/omd-storage/src/checks.rs"
+    },
+    {
+      "source": "crates/omd-storage/src/lib.rs",
+      "destination": "crates/omd-storage/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-storage/src/maintenance.rs",
+      "destination": "crates/omd-storage/src/maintenance.rs"
+    },
+    {
+      "source": "crates/omd-store/Cargo.toml",
+      "destination": "crates/omd-store/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-store/build.rs",
+      "destination": "crates/omd-store/build.rs"
+    },
+    {
+      "source": "crates/omd-store/migrations/0001_acquisition.sql",
+      "destination": "crates/omd-store/migrations/0001_acquisition.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0002_group_requests.sql",
+      "destination": "crates/omd-store/migrations/0002_group_requests.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0003_subscription_retries.sql",
+      "destination": "crates/omd-store/migrations/0003_subscription_retries.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0004_destination_identity.sql",
+      "destination": "crates/omd-store/migrations/0004_destination_identity.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0005_intent_versions.sql",
+      "destination": "crates/omd-store/migrations/0005_intent_versions.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0006_credentials.sql",
+      "destination": "crates/omd-store/migrations/0006_credentials.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0007_selections.sql",
+      "destination": "crates/omd-store/migrations/0007_selections.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0008_job_groups.sql",
+      "destination": "crates/omd-store/migrations/0008_job_groups.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0009_storage_operations.sql",
+      "destination": "crates/omd-store/migrations/0009_storage_operations.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0010_file_operations.sql",
+      "destination": "crates/omd-store/migrations/0010_file_operations.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0011_metadata_overrides.sql",
+      "destination": "crates/omd-store/migrations/0011_metadata_overrides.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0012_acquisition_lookup.sql",
+      "destination": "crates/omd-store/migrations/0012_acquisition_lookup.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0013_subscription_scans.sql",
+      "destination": "crates/omd-store/migrations/0013_subscription_scans.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0014_destination_checks.sql",
+      "destination": "crates/omd-store/migrations/0014_destination_checks.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0015_source_removals.sql",
+      "destination": "crates/omd-store/migrations/0015_source_removals.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0016_notifications.sql",
+      "destination": "crates/omd-store/migrations/0016_notifications.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0017_managed_tools.sql",
+      "destination": "crates/omd-store/migrations/0017_managed_tools.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0018_browser_packages.sql",
+      "destination": "crates/omd-store/migrations/0018_browser_packages.sql"
+    },
+    {
+      "source": "crates/omd-store/migrations/0019_subscription_removal.sql",
+      "destination": "crates/omd-store/migrations/0019_subscription_removal.sql"
+    },
+    {
+      "source": "crates/omd-store/src/groups.rs",
+      "destination": "crates/omd-store/src/groups.rs"
+    },
+    {
+      "source": "crates/omd-store/src/history.rs",
+      "destination": "crates/omd-store/src/history.rs"
+    },
+    {
+      "source": "crates/omd-store/src/lib.rs",
+      "destination": "crates/omd-store/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-store/src/presentation.rs",
+      "destination": "crates/omd-store/src/presentation.rs"
+    },
+    {
+      "source": "crates/omd-store/src/selections.rs",
+      "destination": "crates/omd-store/src/selections.rs"
+    },
+    {
+      "source": "crates/omd-store/src/source_removals.rs",
+      "destination": "crates/omd-store/src/source_removals.rs"
+    },
+    {
+      "source": "crates/omd-store/src/upgrades.rs",
+      "destination": "crates/omd-store/src/upgrades.rs"
+    },
+    {
+      "source": "crates/omd-subscriptions/Cargo.toml",
+      "destination": "crates/omd-subscriptions/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-subscriptions/src/lib.rs",
+      "destination": "crates/omd-subscriptions/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-subscriptions/src/scans.rs",
+      "destination": "crates/omd-subscriptions/src/scans.rs"
+    },
+    {
+      "source": "crates/omd-tools/Cargo.toml",
+      "destination": "crates/omd-tools/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-tools/src/lib.rs",
+      "destination": "crates/omd-tools/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-tools/tests/lifecycle.rs",
+      "destination": "crates/omd-tools/tests/lifecycle.rs"
+    },
+    {
+      "source": "distribution/README.provider-sdk-source.md",
+      "destination": "distribution/README.provider-sdk-source.md"
+    },
+    {
+      "source": "distribution/browser-runtime-inputs.json",
+      "destination": "distribution/browser-runtime-inputs.json"
+    },
+    {
+      "source": "distribution/final-materials-fixtures-v1.json",
+      "destination": "distribution/final-materials-fixtures-v1.json"
+    },
+    {
+      "source": "distribution/final-materials-fixtures-v2.json",
+      "destination": "distribution/final-materials-fixtures-v2.json"
+    },
+    {
+      "source": "distribution/linux/omd-v2-engine.apparmor",
+      "destination": "distribution/linux/omd-v2-engine.apparmor"
+    },
+    {
+      "source": "distribution/macos-signing-policy.json",
+      "destination": "distribution/macos-signing-policy.json"
+    },
+    {
+      "source": "distribution/materials-contract-fixtures-v1.json",
+      "destination": "distribution/materials-contract-fixtures-v1.json"
+    },
+    {
+      "source": "distribution/notarized-materials-fixtures-v1.json",
+      "destination": "distribution/notarized-materials-fixtures-v1.json"
+    },
+    {
+      "source": "distribution/provider-sdk-source-inputs.json",
+      "destination": "distribution/provider-sdk-source-inputs.json"
+    },
+    {
+      "source": "distribution/provider-sdk-source.Cargo.lock",
+      "destination": "distribution/provider-sdk-source.Cargo.lock"
+    },
+    {
+      "source": "distribution/provider-sdk-source.Cargo.toml",
+      "destination": "distribution/provider-sdk-source.Cargo.toml"
+    },
+    {
+      "source": "distribution/public-source-inputs.json",
+      "destination": "distribution/public-source-inputs.json"
+    },
+    {
+      "source": "distribution/yt-dlp-source-curl/.python-version",
+      "destination": "distribution/yt-dlp-source-curl/.python-version"
+    },
+    {
+      "source": "distribution/yt-dlp-source-curl/README.md",
+      "destination": "distribution/yt-dlp-source-curl/README.md"
+    },
+    {
+      "source": "distribution/yt-dlp-source-curl/profile.json",
+      "destination": "distribution/yt-dlp-source-curl/profile.json"
+    },
+    {
+      "source": "distribution/yt-dlp-source-curl/pyproject.toml",
+      "destination": "distribution/yt-dlp-source-curl/pyproject.toml"
+    },
+    {
+      "source": "distribution/yt-dlp-source-curl/uv.lock",
+      "destination": "distribution/yt-dlp-source-curl/uv.lock"
+    },
+    {
+      "source": "distribution/yt-dlp-source/README.md",
+      "destination": "distribution/yt-dlp-source/README.md"
+    },
+    {
+      "source": "distribution/yt-dlp-source/launcher.py",
+      "destination": "distribution/yt-dlp-source/launcher.py"
+    },
+    {
+      "source": "distribution/yt-dlp-source/profile.json",
+      "destination": "distribution/yt-dlp-source/profile.json"
+    },
+    {
+      "source": "distribution/yt-dlp/.python-version",
+      "destination": "distribution/yt-dlp/.python-version"
+    },
+    {
+      "source": "distribution/yt-dlp/README.md",
+      "destination": "distribution/yt-dlp/README.md"
+    },
+    {
+      "source": "distribution/yt-dlp/launcher.py",
+      "destination": "distribution/yt-dlp/launcher.py"
+    },
+    {
+      "source": "distribution/yt-dlp/pyproject.toml",
+      "destination": "distribution/yt-dlp/pyproject.toml"
+    },
+    {
+      "source": "distribution/yt-dlp/uv.lock",
+      "destination": "distribution/yt-dlp/uv.lock"
+    },
+    {
+      "source": "docs/architecture.md",
+      "destination": "docs/architecture.md"
+    },
+    {
+      "source": "docs/getting-started.md",
+      "destination": "docs/getting-started.md"
+    },
+    {
+      "source": "docs/linux-runtime.md",
+      "destination": "docs/linux-runtime.md"
+    },
+    {
+      "source": "docs/macos-payload-minimum.md",
+      "destination": "docs/macos-payload-minimum.md"
+    },
+    {
+      "source": "docs/macos-signing.md",
+      "destination": "docs/macos-signing.md"
+    },
+    {
+      "source": "docs/materials-contract.md",
+      "destination": "docs/materials-contract.md"
+    },
+    {
+      "source": "docs/mcp.md",
+      "destination": "docs/mcp.md"
+    },
+    {
+      "source": "docs/mcp/plugin-authoring.md",
+      "destination": "docs/mcp/plugin-authoring.md"
+    },
+    {
+      "source": "docs/mcp/workflows.md",
+      "destination": "docs/mcp/workflows.md"
+    },
+    {
+      "source": "docs/source-distribution.md",
+      "destination": "docs/source-distribution.md"
+    },
+    {
+      "source": "docs/v2-development.md",
+      "destination": "docs/v2-development.md"
+    },
+    {
+      "source": "docs/windows-signing.md",
+      "destination": "docs/windows-signing.md"
+    },
+    {
+      "source": "package-lock.json",
+      "destination": "package-lock.json"
+    },
+    {
+      "source": "package.json",
+      "destination": "package.json"
+    },
+    {
+      "source": "rust-toolchain.toml",
+      "destination": "rust-toolchain.toml"
+    },
+    {
+      "source": "schemas/v2/domain.json",
+      "destination": "schemas/v2/domain.json"
+    },
+    {
+      "source": "schemas/v2/openapi.json",
+      "destination": "schemas/v2/openapi.json"
+    },
+    {
+      "source": "scripts/bind-final-materials.py",
+      "destination": "scripts/bind-final-materials.py"
+    },
+    {
+      "source": "scripts/bind-notarized-materials.py",
+      "destination": "scripts/bind-notarized-materials.py"
+    },
+    {
+      "source": "scripts/browser-source.mjs",
+      "destination": "scripts/browser-source.mjs"
+    },
+    {
+      "source": "scripts/browser-source.test.mjs",
+      "destination": "scripts/browser-source.test.mjs"
+    },
+    {
+      "source": "scripts/build-media.py",
+      "destination": "scripts/build-media.py"
+    },
+    {
+      "source": "scripts/build-public-engine.py",
+      "destination": "scripts/build-public-engine.py"
+    },
+    {
+      "source": "scripts/build-ytdlp-source.py",
+      "destination": "scripts/build-ytdlp-source.py"
+    },
+    {
+      "source": "scripts/build-ytdlp.py",
+      "destination": "scripts/build-ytdlp.py"
+    },
+    {
+      "source": "scripts/cargo-paths.mjs",
+      "destination": "scripts/cargo-paths.mjs"
+    },
+    {
+      "source": "scripts/cargo-paths.test.mjs",
+      "destination": "scripts/cargo-paths.test.mjs"
+    },
+    {
+      "source": "scripts/check-macos-payload.py",
+      "destination": "scripts/check-macos-payload.py"
+    },
+    {
+      "source": "scripts/check-source-performance.py",
+      "destination": "scripts/check-source-performance.py"
+    },
+    {
+      "source": "scripts/check-v2-contracts.mjs",
+      "destination": "scripts/check-v2-contracts.mjs"
+    },
+    {
+      "source": "scripts/ci-linux-apparmor.py",
+      "destination": "scripts/ci-linux-apparmor.py"
+    },
+    {
+      "source": "scripts/export-public-source.py",
+      "destination": "scripts/export-public-source.py"
+    },
+    {
+      "source": "scripts/final_materials.py",
+      "destination": "scripts/final_materials.py"
+    },
+    {
+      "source": "scripts/generate-mcp.py",
+      "destination": "scripts/generate-mcp.py"
+    },
+    {
+      "source": "scripts/generate-native-notices.py",
+      "destination": "scripts/generate-native-notices.py"
+    },
+    {
+      "source": "scripts/integrate-v2.mjs",
+      "destination": "scripts/integrate-v2.mjs"
+    },
+    {
+      "source": "scripts/integration-config.mjs",
+      "destination": "scripts/integration-config.mjs"
+    },
+    {
+      "source": "scripts/integration-config.test.mjs",
+      "destination": "scripts/integration-config.test.mjs"
+    },
+    {
+      "source": "scripts/macos_extractor.py",
+      "destination": "scripts/macos_extractor.py"
+    },
+    {
+      "source": "scripts/macos_extractor_source.py",
+      "destination": "scripts/macos_extractor_source.py"
+    },
+    {
+      "source": "scripts/macos_signing.py",
+      "destination": "scripts/macos_signing.py"
+    },
+    {
+      "source": "scripts/materials_contract.py",
+      "destination": "scripts/materials_contract.py"
+    },
+    {
+      "source": "scripts/mcp_stdio.py",
+      "destination": "scripts/mcp_stdio.py"
+    },
+    {
+      "source": "scripts/native_review.py",
+      "destination": "scripts/native_review.py"
+    },
+    {
+      "source": "scripts/notarized_materials.py",
+      "destination": "scripts/notarized_materials.py"
+    },
+    {
+      "source": "scripts/package-browser.py",
+      "destination": "scripts/package-browser.py"
+    },
+    {
+      "source": "scripts/package-conformance-worker.py",
+      "destination": "scripts/package-conformance-worker.py"
+    },
+    {
+      "source": "scripts/package-media-sources.py",
+      "destination": "scripts/package-media-sources.py"
+    },
+    {
+      "source": "scripts/package-runtime.py",
+      "destination": "scripts/package-runtime.py"
+    },
+    {
+      "source": "scripts/pe_authenticode.py",
+      "destination": "scripts/pe_authenticode.py"
+    },
+    {
+      "source": "scripts/prepare-macos-extractor.py",
+      "destination": "scripts/prepare-macos-extractor.py"
+    },
+    {
+      "source": "scripts/public_inputs.py",
+      "destination": "scripts/public_inputs.py"
+    },
+    {
+      "source": "scripts/rebuild-snapshot-tool.py",
+      "destination": "scripts/rebuild-snapshot-tool.py"
+    },
+    {
+      "source": "scripts/sign-macos.py",
+      "destination": "scripts/sign-macos.py"
+    },
+    {
+      "source": "scripts/smoke-runtime.py",
+      "destination": "scripts/smoke-runtime.py"
+    },
+    {
+      "source": "scripts/source-fingerprint.mjs",
+      "destination": "scripts/source-fingerprint.mjs"
+    },
+    {
+      "source": "scripts/source-fingerprint.test.mjs",
+      "destination": "scripts/source-fingerprint.test.mjs"
+    },
+    {
+      "source": "scripts/test-build-public-engine.py",
+      "destination": "scripts/test-build-public-engine.py"
+    },
+    {
+      "source": "scripts/test-build-ytdlp-source.py",
+      "destination": "scripts/test-build-ytdlp-source.py"
+    },
+    {
+      "source": "scripts/test-final-materials.py",
+      "destination": "scripts/test-final-materials.py"
+    },
+    {
+      "source": "scripts/test-macos-payload.py",
+      "destination": "scripts/test-macos-payload.py"
+    },
+    {
+      "source": "scripts/test-manual-updates.py",
+      "destination": "scripts/test-manual-updates.py"
+    },
+    {
+      "source": "scripts/test-materials.py",
+      "destination": "scripts/test-materials.py"
+    },
+    {
+      "source": "scripts/test-mcp.py",
+      "destination": "scripts/test-mcp.py"
+    },
+    {
+      "source": "scripts/test-notarized-materials.py",
+      "destination": "scripts/test-notarized-materials.py"
+    },
+    {
+      "source": "scripts/test-package-runtime.py",
+      "destination": "scripts/test-package-runtime.py"
+    },
+    {
+      "source": "scripts/test-prepare-macos-extractor-source.py",
+      "destination": "scripts/test-prepare-macos-extractor-source.py"
+    },
+    {
+      "source": "scripts/test-prepare-macos-extractor.py",
+      "destination": "scripts/test-prepare-macos-extractor.py"
+    },
+    {
+      "source": "scripts/test-public-distribution.py",
+      "destination": "scripts/test-public-distribution.py"
+    },
+    {
+      "source": "scripts/test-sign-macos.py",
+      "destination": "scripts/test-sign-macos.py"
+    },
+    {
+      "source": "scripts/verify-media-build.py",
+      "destination": "scripts/verify-media-build.py"
+    },
+    {
+      "source": "scripts/windows-sign-gate.ps1",
+      "destination": "scripts/windows-sign-gate.ps1"
+    },
+    {
+      "source": "scripts/ytdlp_source.py",
+      "destination": "scripts/ytdlp_source.py"
+    },
+    {
+      "source": "scripts/ytdlp_source_fixture.py",
+      "destination": "scripts/ytdlp_source_fixture.py"
+    },
+    {
+      "source": "scripts/ytdlp_source_replay.py",
+      "destination": "scripts/ytdlp_source_replay.py"
+    },
+    {
+      "source": "sdk/client/LICENSE",
+      "destination": "sdk/client/LICENSE"
+    },
+    {
+      "source": "sdk/client/README.md",
+      "destination": "sdk/client/README.md"
+    },
+    {
+      "source": "sdk/client/bin/generate.mjs",
+      "destination": "sdk/client/bin/generate.mjs"
+    },
+    {
+      "source": "sdk/client/openapi.json",
+      "destination": "sdk/client/openapi.json"
+    },
+    {
+      "source": "sdk/client/package-lock.json",
+      "destination": "sdk/client/package-lock.json"
+    },
+    {
+      "source": "sdk/client/package.json",
+      "destination": "sdk/client/package.json"
+    },
+    {
+      "source": "sdk/client/src/errors.ts",
+      "destination": "sdk/client/src/errors.ts"
+    },
+    {
+      "source": "sdk/client/src/http.generated.ts",
+      "destination": "sdk/client/src/http.generated.ts"
+    },
+    {
+      "source": "sdk/client/src/http.ts",
+      "destination": "sdk/client/src/http.ts"
+    },
+    {
+      "source": "sdk/client/src/index.ts",
+      "destination": "sdk/client/src/index.ts"
+    },
+    {
+      "source": "sdk/client/src/models.ts",
+      "destination": "sdk/client/src/models.ts"
+    },
+    {
+      "source": "sdk/client/src/scopes.generated.ts",
+      "destination": "sdk/client/src/scopes.generated.ts"
+    },
+    {
+      "source": "sdk/client/test/http.test.mjs",
+      "destination": "sdk/client/test/http.test.mjs"
+    },
+    {
+      "source": "sdk/client/test/type-contract.ts",
+      "destination": "sdk/client/test/type-contract.ts"
+    },
+    {
+      "source": "sdk/client/tsconfig.json",
+      "destination": "sdk/client/tsconfig.json"
+    },
+    {
+      "source": "sdk/client/tsconfig.test.json",
+      "destination": "sdk/client/tsconfig.test.json"
+    },
+    {
+      "source": "sdk/provider/LICENSE",
+      "destination": "sdk/provider/LICENSE"
+    },
+    {
+      "source": "sdk/provider/README.md",
+      "destination": "sdk/provider/README.md"
+    },
+    {
+      "source": "sdk/provider/bin/componentize-deterministic.mjs",
+      "destination": "sdk/provider/bin/componentize-deterministic.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/diagnostics.mjs",
+      "destination": "sdk/provider/bin/diagnostics.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/generate-contracts.mjs",
+      "destination": "sdk/provider/bin/generate-contracts.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/omd-plugin.mjs",
+      "destination": "sdk/provider/bin/omd-plugin.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/process.mjs",
+      "destination": "sdk/provider/bin/process.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/sdk-package.mjs",
+      "destination": "sdk/provider/bin/sdk-package.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/testing.d.mts",
+      "destination": "sdk/provider/bin/testing.d.mts"
+    },
+    {
+      "source": "sdk/provider/bin/testing.mjs",
+      "destination": "sdk/provider/bin/testing.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/windows-job.ps1",
+      "destination": "sdk/provider/bin/windows-job.ps1"
+    },
+    {
+      "source": "sdk/provider/build-tool/README.md",
+      "destination": "sdk/provider/build-tool/README.md"
+    },
+    {
+      "source": "sdk/provider/build-tool/THIRD_PARTY_NOTICES.txt",
+      "destination": "sdk/provider/build-tool/THIRD_PARTY_NOTICES.txt"
+    },
+    {
+      "source": "sdk/provider/build-tool/omd-component-snapshot.wasm",
+      "destination": "sdk/provider/build-tool/omd-component-snapshot.wasm",
+      "sha256": "c57a72dff894df82a557d5b37063e94a1b760bcea6ee1e4e78db1f875357f826"
+    },
+    {
+      "source": "sdk/provider/build-tool/toolchain.json",
+      "destination": "sdk/provider/build-tool/toolchain.json"
+    },
+    {
+      "source": "sdk/provider/package-lock.json",
+      "destination": "sdk/provider/package-lock.json"
+    },
+    {
+      "source": "sdk/provider/package.json",
+      "destination": "sdk/provider/package.json"
+    },
+    {
+      "source": "sdk/provider/src/broker.d.ts",
+      "destination": "sdk/provider/src/broker.d.ts"
+    },
+    {
+      "source": "sdk/provider/src/contracts.ts",
+      "destination": "sdk/provider/src/contracts.ts"
+    },
+    {
+      "source": "sdk/provider/src/index.ts",
+      "destination": "sdk/provider/src/index.ts"
+    },
+    {
+      "source": "sdk/provider/test/authoring.test.mjs",
+      "destination": "sdk/provider/test/authoring.test.mjs"
+    },
+    {
+      "source": "sdk/provider/test/browser.test.mjs",
+      "destination": "sdk/provider/test/browser.test.mjs"
+    },
+    {
+      "source": "sdk/provider/test/build-tool.test.mjs",
+      "destination": "sdk/provider/test/build-tool.test.mjs"
+    },
+    {
+      "source": "sdk/provider/test/diagnostics.test.mjs",
+      "destination": "sdk/provider/test/diagnostics.test.mjs"
+    },
+    {
+      "source": "sdk/provider/test/fixtures.test.mjs",
+      "destination": "sdk/provider/test/fixtures.test.mjs"
+    },
+    {
+      "source": "sdk/provider/test/process.test.mjs",
+      "destination": "sdk/provider/test/process.test.mjs"
+    },
+    {
+      "source": "sdk/provider/test/reproducibility.test.mjs",
+      "destination": "sdk/provider/test/reproducibility.test.mjs"
+    },
+    {
+      "source": "sdk/provider/tsconfig.json",
+      "destination": "sdk/provider/tsconfig.json"
+    },
+    {
+      "source": "sdk/provider/wit/provider.wit",
+      "destination": "sdk/provider/wit/provider.wit"
+    },
+    {
+      "source": "tests/build-browser-fixture-kit.py",
+      "destination": "tests/build-browser-fixture-kit.py"
+    },
+    {
+      "source": "tests/fixtures/media/README.md",
+      "destination": "tests/fixtures/media/README.md"
+    },
+    {
+      "source": "tests/fixtures/media/apple-he-aac-3s.m4a",
+      "destination": "tests/fixtures/media/apple-he-aac-3s.m4a",
+      "sha256": "5eda7270a7361862fda54825527d39e5cc1788f8391fc172ebcd5c1bb0200577"
+    },
+    {
+      "source": "tests/fixtures/media/apple-he-aac-v2-3s.m4a",
+      "destination": "tests/fixtures/media/apple-he-aac-v2-3s.m4a",
+      "sha256": "5385427ccf86594b947c357b888c6032a0c29f5c580d3a1c581fb76ca422054f"
+    },
+    {
+      "source": "tests/fixtures/v2-plan.json",
+      "destination": "tests/fixtures/v2-plan.json"
+    },
+    {
+      "source": "tests/support/worker.rs",
+      "destination": "tests/support/worker.rs"
+    },
+    {
+      "source": "tests/v2-acquisition-provider/omd-plugin.json",
+      "destination": "tests/v2-acquisition-provider/omd-plugin.json"
+    },
+    {
+      "source": "tests/v2-acquisition-provider/src/index.ts",
+      "destination": "tests/v2-acquisition-provider/src/index.ts"
+    },
+    {
+      "source": "tests/v2-browser-provider/omd-plugin.json",
+      "destination": "tests/v2-browser-provider/omd-plugin.json"
+    },
+    {
+      "source": "tests/v2-browser-provider/src/index.ts",
+      "destination": "tests/v2-browser-provider/src/index.ts"
+    },
+    {
+      "source": "tests/v2-openapi.py",
+      "destination": "tests/v2-openapi.py"
+    },
+    {
+      "source": "tests/v2-provider/omd-plugin.json",
+      "destination": "tests/v2-provider/omd-plugin.json"
+    },
+    {
+      "source": "tests/v2-provider/src/index.ts",
+      "destination": "tests/v2-provider/src/index.ts"
+    }
+  ]
+}

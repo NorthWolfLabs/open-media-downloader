@@ -1,0 +1,166 @@
+{
+  "schema": "omd-ytdlp-source-profile-v1",
+  "id": "omd-ytdlp-source-2026.08.19-cpython-3.13.14-macos-arm64-v1",
+  "status": "prototype",
+  "release_accepted": false,
+  "promotable": false,
+  "target": {
+    "os": "macos",
+    "arch": "arm64",
+    "macos_minimum": "13.5"
+  },
+  "extractor": {
+    "name": "omd-yt-dlp",
+    "version": "2026.08.19",
+    "package": "yt-dlp",
+    "package_version": "2026.8.19",
+    "extras": ["default"]
+  },
+  "legacy_profile": {
+    "pyproject": "distribution/yt-dlp/pyproject.toml",
+    "lock": "distribution/yt-dlp/uv.lock",
+    "python_version_file": "distribution/yt-dlp/.python-version",
+    "lock_adjustments": [
+      {
+        "package": "pyinstaller",
+        "lock_version": "6.22.2",
+        "profile_version": "6.22.0",
+        "reason": "6.22.0 is the version whose CArchive reader, writers and macOS steps the reviewed signing and extractor-preparation helpers pin. Its darwin dependency set equals the locked 6.22.2 entry."
+      }
+    ]
+  },
+  "launcher": "distribution/yt-dlp-source/launcher.py",
+  "logical_prefix": "/opt/omd-ytdlp-source",
+  "source_date_epoch": 1787097600,
+  "jobs": 4,
+  "inputs": [
+    {"id": "cpython", "kind": "cpython", "role": "shipped-source", "package": "cpython", "version": "3.13.14", "file": "Python-3.13.14.tar.xz", "url": "https://www.python.org/ftp/python/3.13.14/Python-3.13.14.tar.xz", "sha256": "639e43243c620a308f968213df9e00f2f8f62332f7adbaa7a7eeb9783057c690", "bytes": 23021880, "upstream_check": "sha256 published by the python.org release API; Sigstore bundle verified for thomas@python.org"},
+    {"id": "openssl", "kind": "native", "role": "shipped-source", "package": "openssl", "version": "3.5.7", "file": "openssl-3.5.7.tar.gz", "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.7/openssl-3.5.7.tar.gz", "sha256": "a8c0d28a529ca480f9f36cf5792e2cd21984552a3c8e4aa11a24aa31aeac98e8", "bytes": 53153930, "upstream_check": "sha256 published by OpenSSL; pinned by the CPython 3.14.6 macOS installer recipe"},
+    {"id": "xz", "kind": "native", "role": "shipped-source", "package": "xz", "version": "5.2.3", "file": "xz-5.2.3.tar.gz", "url": "https://tukaani.org/xz/xz-5.2.3.tar.gz", "sha256": "71928b357d0a09a12a4b4c5fafca8c31c19b0e7d3b8ebb19622e96f26dbf28cb", "bytes": 1490665, "upstream_check": "MD5 ef68674fb47a8b8e741b34e429d86e9d pinned by the CPython 3.13.14 macOS installer recipe"},
+    {"id": "sqlite", "kind": "native", "role": "shipped-source", "package": "sqlite", "version": "3.50.4", "file": "sqlite-autoconf-3500400.tar.gz", "url": "https://www.sqlite.org/2025/sqlite-autoconf-3500400.tar.gz", "sha256": "a3db587a1b92ee5ddac2f66b3edb41b26f9c867275782d46c3a088977d6a5b18", "bytes": 3173050, "upstream_check": "sha256 pinned by the CPython 3.13.14 macOS installer recipe"},
+    {"id": "mpdecimal", "kind": "native", "role": "shipped-source", "package": "mpdecimal", "version": "4.0.1", "file": "mpdecimal-4.0.1.tar.gz", "url": "https://www.bytereef.org/software/mpdecimal/releases/mpdecimal-4.0.1.tar.gz", "sha256": "96d33abb4bb0070c7be0fed4246cd38416188325f820468214471938545b1ac8", "bytes": 316268, "upstream_check": "sha256 pinned by the CPython 3.13.14 macOS installer recipe"},
+    {"id": "sdist:pyinstaller", "kind": "sdist", "role": "shipped-source", "package": "pyinstaller", "version": "6.22.0", "file": "pyinstaller-6.22.0.tar.gz", "url": "https://files.pythonhosted.org/packages/05/03/669d06735cf57d7e2e5dfc3c2e1643554b34c559eff21449c58172ca0335/pyinstaller-6.22.0.tar.gz", "sha256": "8b0166fff4583b374bbe7fa044bf03ddc33cab0f792a665807d96048e63f060e", "bytes": 4072247, "upstream_check": "PyPI sdist sha256"},
+    {"id": "sdist:yt-dlp", "kind": "sdist", "role": "shipped-source", "package": "yt-dlp", "version": "2026.8.19", "file": "yt_dlp-2026.8.19.tar.gz", "url": "https://files.pythonhosted.org/packages/1e/e0/832fa4ca334b766a06933a196066edc3dba37cdb6f14cd98d59bcc69a4b4/yt_dlp-2026.8.19.tar.gz", "sha256": "9e213e48cea35c66b378e4447903f118f6392a5fa380a2b6d7070ec86f4e0af1", "bytes": 3052025},
+    {"id": "sdist:brotli", "kind": "sdist", "role": "shipped-source", "package": "brotli", "version": "1.2.0", "file": "brotli-1.2.0.tar.gz", "url": "https://files.pythonhosted.org/packages/f7/16/c92ca344d646e71a43b8bb353f0a6490d7f6e06210f8554c8f874e454285/brotli-1.2.0.tar.gz", "sha256": "e310f77e41941c13340a95976fe66a8a95b01e783d430eeaf7a2f87e0a57dd0a", "bytes": 7388632},
+    {"id": "sdist:certifi", "kind": "sdist", "role": "shipped-source", "package": "certifi", "version": "2026.7.22", "file": "certifi-2026.7.22.tar.gz", "url": "https://files.pythonhosted.org/packages/a3/c2/24167ea9858356b47a87a50d39908bfdb72ceeefe0041586e704e5376b3a/certifi-2026.7.22.tar.gz", "sha256": "741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55", "bytes": 138112},
+    {"id": "sdist:charset-normalizer", "kind": "sdist", "role": "shipped-source", "package": "charset-normalizer", "version": "3.5.1", "file": "charset_normalizer-3.5.1.tar.gz", "url": "https://files.pythonhosted.org/packages/e5/3f/143b048436775b0f76ac3eec145c019e8173ccc2885c8f20319b996d5e83/charset_normalizer-3.5.1.tar.gz", "sha256": "6117b84ea48435e5356dc737f5121485c30920ba43375fa7b434fd753df0eac3", "bytes": 171764},
+    {"id": "sdist:idna", "kind": "sdist", "role": "shipped-source", "package": "idna", "version": "3.19", "file": "idna-3.19.tar.gz", "url": "https://files.pythonhosted.org/packages/5f/f7/abb373e5757eaec4b922b92f97ec8d6d7e057cf06778247604fbc4e7c3f3/idna-3.19.tar.gz", "sha256": "5e0811a4383b21dc5838069f801c4fb62113b7447663d2530d2bd6e77b49bf15", "bytes": 215237},
+    {"id": "sdist:mutagen", "kind": "sdist", "role": "shipped-source", "package": "mutagen", "version": "1.48.1", "file": "mutagen-1.48.1.tar.gz", "url": "https://files.pythonhosted.org/packages/df/70/1675da133ea92227da41bf5b24e1c66be597ff736a1533ade41da986852f/mutagen-1.48.1.tar.gz", "sha256": "8f95637ab9f6f305cec6bd1294e197debe207998e3e068596563c74f86b0a173", "bytes": 1276978},
+    {"id": "sdist:pycryptodomex", "kind": "sdist", "role": "shipped-source", "package": "pycryptodomex", "version": "3.23.0", "file": "pycryptodomex-3.23.0.tar.gz", "url": "https://files.pythonhosted.org/packages/c9/85/e24bf90972a30b0fcd16c73009add1d7d7cd9140c2498a68252028899e41/pycryptodomex-3.23.0.tar.gz", "sha256": "71909758f010c82bc99b0abf4ea12012c98962fbf0583c2164f8b84533c2e4da", "bytes": 4922157},
+    {"id": "sdist:requests", "kind": "sdist", "role": "shipped-source", "package": "requests", "version": "2.34.2", "file": "requests-2.34.2.tar.gz", "url": "https://files.pythonhosted.org/packages/ac/c3/e2a2b89f2d3e2179abd6d00ebd70bff6273f37fb3e0cc209f48b39d00cbf/requests-2.34.2.tar.gz", "sha256": "f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed", "bytes": 142856},
+    {"id": "sdist:urllib3", "kind": "sdist", "role": "shipped-source", "package": "urllib3", "version": "2.7.0", "file": "urllib3-2.7.0.tar.gz", "url": "https://files.pythonhosted.org/packages/53/0c/06f8b233b8fd13b9e5ee11424ef85419ba0d8ba0b3138bf360be2ff56953/urllib3-2.7.0.tar.gz", "sha256": "231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c", "bytes": 433602},
+    {"id": "sdist:websockets", "kind": "sdist", "role": "shipped-source", "package": "websockets", "version": "17.1", "file": "websockets-17.1.tar.gz", "url": "https://files.pythonhosted.org/packages/18/72/fba934cb3dff7a85d811820efffcd141ddd52b5a2a01637f64551373ff4d/websockets-17.1.tar.gz", "sha256": "acfea4c20bf54384883ea33b1240fc1db4f52e190823a4e2b334bc3e8bfca96a", "bytes": 187520},
+    {"id": "sdist:yt-dlp-ejs", "kind": "sdist", "role": "shipped-source", "package": "yt-dlp-ejs", "version": "0.8.0", "file": "yt_dlp_ejs-0.8.0.tar.gz", "url": "https://files.pythonhosted.org/packages/d3/e6/cceb9530e8f4e5940f6f7822d90e9d94f1b85343329a16baaf47bbbb3de1/yt_dlp_ejs-0.8.0.tar.gz", "sha256": "d5fa1639f63b5c4af8d932495f60689d5370f1a095782c944f7f62a303eb104e", "bytes": 96571},
+    {"id": "sdist:altgraph", "kind": "sdist", "role": "packaging-source", "package": "altgraph", "version": "0.17.5", "file": "altgraph-0.17.5.tar.gz", "url": "https://files.pythonhosted.org/packages/7e/f8/97fdf103f38fed6792a1601dbc16cc8aac56e7459a9fff08c812d8ae177a/altgraph-0.17.5.tar.gz", "sha256": "c87b395dd12fabde9c99573a9749d67da8d29ef9de0125c7f536699b4a9bc9e7", "bytes": 48428},
+    {"id": "sdist:macholib", "kind": "sdist", "role": "packaging-source", "package": "macholib", "version": "1.16.4", "file": "macholib-1.16.4.tar.gz", "url": "https://files.pythonhosted.org/packages/10/2f/97589876ea967487978071c9042518d28b958d87b17dceb7cdc1d881f963/macholib-1.16.4.tar.gz", "sha256": "f408c93ab2e995cd2c46e34fe328b130404be143469e41bc366c807448979362", "bytes": 59427},
+    {"id": "sdist:packaging", "kind": "sdist", "role": "packaging-source", "package": "packaging", "version": "26.3", "file": "packaging-26.3.tar.gz", "url": "https://files.pythonhosted.org/packages/7d/fa/3944b40b07da9ce895c0e6303a5ab7d53da063554f534556b134a54d6093/packaging-26.3.tar.gz", "sha256": "94edc256424af38762eb31306eed28beb9f0efc50a8837492c9d6fd6004aed79", "bytes": 313412},
+    {"id": "sdist:pyinstaller-hooks-contrib", "kind": "sdist", "role": "packaging-source", "package": "pyinstaller-hooks-contrib", "version": "2026.7", "file": "pyinstaller_hooks_contrib-2026.7.tar.gz", "url": "https://files.pythonhosted.org/packages/26/60/d881fa1ba8c160c18d8e6f782bb16ec4640c08bc08fc50f704c368ad4f9e/pyinstaller_hooks_contrib-2026.7.tar.gz", "sha256": "5fbcaacb22c4f4aac869a127dce283f67a4b4cfcc37d496f2446603e6d68aefa", "bytes": 175992},
+    {"id": "sdist:setuptools", "kind": "sdist", "role": "packaging-source", "package": "setuptools", "version": "84.0.0", "file": "setuptools-84.0.0.tar.gz", "url": "https://files.pythonhosted.org/packages/6d/44/f5da03a8ef95d369145c5bb53050e7877c9f3d312e128605fd9504829143/setuptools-84.0.0.tar.gz", "sha256": "f4695c21257f0d9b537ec2692c941d02ee143b7cc1276941349a546573b2ef73", "bytes": 1168449},
+    {"id": "tool:node", "kind": "node", "role": "build-tool", "package": "node", "version": "24.20.0", "file": "node-v24.20.0-darwin-arm64.tar.gz", "url": "https://nodejs.org/dist/v24.20.0/node-v24.20.0-darwin-arm64.tar.gz", "sha256": "40e5607e5ecb3db9192723776da2d75d966260fc74a7a9e731c1bd67dda96bc8", "bytes": 52813331, "upstream_check": "official SHASUMS256.txt for v24.20.0 (the project's .node-version pin)"},
+    {"id": "tool:flit-core", "kind": "wheel", "role": "build-tool", "package": "flit-core", "version": "4.0.2", "file": "flit_core-4.0.2-py3-none-any.whl", "url": "https://files.pythonhosted.org/packages/40/79/099ca4ec8c22b6462577ef933f90eed4c47cdcf6473d2cfcad275c3ce232/flit_core-4.0.2-py3-none-any.whl", "sha256": "8d80717e28d982b41594ed5b14d4e89fbc5bad55473fde27994a3101db18a94e", "bytes": 44551},
+    {"id": "tool:hatch-vcs", "kind": "wheel", "role": "build-tool", "package": "hatch-vcs", "version": "0.5.0", "file": "hatch_vcs-0.5.0-py3-none-any.whl", "url": "https://files.pythonhosted.org/packages/5f/48/1f85cee4b7b4f40b9b814b1febbc661bda6ced9649e410a0b74f6e415dd0/hatch_vcs-0.5.0-py3-none-any.whl", "sha256": "b49677dbdc597460cc22d01b27ab3696f5e16a21ecf2700fb01bc28e1f2a04a7", "bytes": 8507},
+    {"id": "tool:hatchling", "kind": "wheel", "role": "build-tool", "package": "hatchling", "version": "1.32.0", "file": "hatchling-1.32.0-py3-none-any.whl", "url": "https://files.pythonhosted.org/packages/a9/84/1798b6d85ecde0e31546004efd25c5de1b1f49250644a60cce460e12593a/hatchling-1.32.0-py3-none-any.whl", "sha256": "0e17c9c3b9aa7c625acc8d0f5b622f107d5049af9ecf5ada4de1aada5be7cdbc", "bytes": 78435},
+    {"id": "tool:packaging", "kind": "wheel", "role": "build-tool", "package": "packaging", "version": "26.3", "file": "packaging-26.3-py3-none-any.whl", "url": "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl", "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c", "bytes": 129956},
+    {"id": "tool:pathspec", "kind": "wheel", "role": "build-tool", "package": "pathspec", "version": "1.1.1", "file": "pathspec-1.1.1-py3-none-any.whl", "url": "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl", "sha256": "a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189", "bytes": 57328},
+    {"id": "tool:pluggy", "kind": "wheel", "role": "build-tool", "package": "pluggy", "version": "1.6.0", "file": "pluggy-1.6.0-py3-none-any.whl", "url": "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", "sha256": "e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", "bytes": 20538},
+    {"id": "tool:setuptools", "kind": "wheel", "role": "build-tool", "package": "setuptools", "version": "84.0.0", "file": "setuptools-84.0.0-py3-none-any.whl", "url": "https://files.pythonhosted.org/packages/95/9c/c510029fc6ef33a6275cd2c5d3cecd6613dfd6aa401d57c54f1c18852ccf/setuptools-84.0.0-py3-none-any.whl", "sha256": "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670", "bytes": 818216},
+    {"id": "tool:setuptools-scm", "kind": "wheel", "role": "build-tool", "package": "setuptools-scm", "version": "10.2.1", "file": "setuptools_scm-10.2.1-py3-none-any.whl", "url": "https://files.pythonhosted.org/packages/c3/b4/02ac1d9833b882c87b3a4e82703e70eac4ab33d0d15fb123e60bb01f3bc1/setuptools_scm-10.2.1-py3-none-any.whl", "sha256": "b7c82f4102d389ee57dc66ccdb4f9b4bca3c40ba83b43f1f63d68ccd72db2580", "bytes": 29078},
+    {"id": "tool:tomlkit", "kind": "wheel", "role": "build-tool", "package": "tomlkit", "version": "0.15.1", "file": "tomlkit-0.15.1-py3-none-any.whl", "url": "https://files.pythonhosted.org/packages/13/bc/8c13eb66537dce1d2bd3a57132902f38d0e7f5bb46fa9f4daed9fe9d76ee/tomlkit-0.15.1-py3-none-any.whl", "sha256": "177a05aece5a8ca5266fd3c448abb47b8d352f09d477d3ca8332db4d89b24304", "bytes": 49449},
+    {"id": "tool:trove-classifiers", "kind": "wheel", "role": "build-tool", "package": "trove-classifiers", "version": "2026.6.1.19", "file": "trove_classifiers-2026.6.1.19-py3-none-any.whl", "url": "https://files.pythonhosted.org/packages/7c/a4/81502f486f01db95bc8320646a8a12511f5e556cb63d5e224d91816605c4/trove_classifiers-2026.6.1.19-py3-none-any.whl", "sha256": "ab4c4ec93cc4a4e7815fa759906e05e6bb3f2fbd92ea0f897288c6a43efd15b3", "bytes": 14211},
+    {"id": "tool:vcs-versioning", "kind": "wheel", "role": "build-tool", "package": "vcs-versioning", "version": "2.3.1", "file": "vcs_versioning-2.3.1-py3-none-any.whl", "url": "https://files.pythonhosted.org/packages/8e/1e/94c0a4b8c8c639e91ff6bce375a2c92460a711b9e040b28674ed492d004d/vcs_versioning-2.3.1-py3-none-any.whl", "sha256": "a11299394e101569a62ab061375260d08bc56cd33d685b7067d85312368f4457", "bytes": 114617}
+  ],
+  "build_tools_resolution": "uv pip compile --generate-hashes --only-binary :all: --python-version 3.13 --python-platform aarch64-apple-darwin --exclude-newer 2026-08-27T00:00:00Z of: setuptools==84.0.0, flit_core>=3.12,<5, hatchling>=1.27.0,<2, hatch-vcs>=0.4.0,<0.6.0, setuptools-scm>=8,<11",
+  "npm": {
+    "from": "sdist:yt-dlp-ejs",
+    "lock": "package-lock.json",
+    "os": "darwin",
+    "cpu": "arm64",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "native": [
+    {
+      "id": "xz",
+      "input": "xz",
+      "official_recipe": "CPython 3.13.14 Mac/BuildScript/build-installer.py: XZ 5.2.3, --disable-dependency-tracking, static",
+      "steps": [
+        ["./configure", "--prefix={deps}", "--enable-static", "--disable-shared", "--disable-dependency-tracking", "CFLAGS=-mmacosx-version-min=13.5 -arch arm64 -I{deps}/include", "LDFLAGS=-mmacosx-version-min=13.5 -L{deps}/lib -arch arm64"],
+        ["make", "-j{jobs}"],
+        ["make", "install"]
+      ],
+      "products": ["lib/liblzma.a"]
+    },
+    {
+      "id": "sqlite",
+      "input": "sqlite",
+      "official_recipe": "CPython 3.13.14 Mac/BuildScript/build-installer.py: SQLite 3.50.4 flags, static",
+      "steps": [
+        ["./configure", "--prefix={deps}", "--enable-static", "--disable-shared", "--enable-threadsafe", "--disable-readline", "--disable-dependency-tracking", "CFLAGS=-Os -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_FTS4 -DSQLITE_ENABLE_FTS3_PARENTHESIS -DSQLITE_ENABLE_RTREE -DSQLITE_OMIT_AUTOINIT -DSQLITE_TCL=0 -mmacosx-version-min=13.5 -arch arm64 -I{deps}/include", "LDFLAGS=-mmacosx-version-min=13.5 -L{deps}/lib -arch arm64"],
+        ["make", "-j{jobs}"],
+        ["ranlib", "libsqlite3.a"],
+        ["make", "install"]
+      ],
+      "products": ["lib/libsqlite3.a"]
+    },
+    {
+      "id": "mpdecimal",
+      "input": "mpdecimal",
+      "official_recipe": "CPython 3.13.14 Mac/BuildScript/build-installer.py: libmpdec 4.0.1, --disable-cxx MACHINE=universal, static",
+      "steps": [
+        ["./configure", "--prefix={deps}", "--enable-static", "--disable-shared", "--disable-cxx", "MACHINE=universal", "CFLAGS=-mmacosx-version-min=13.5 -arch arm64 -I{deps}/include", "LDFLAGS=-mmacosx-version-min=13.5 -L{deps}/lib -arch arm64"],
+        ["make", "-j{jobs}"],
+        ["make", "install"]
+      ],
+      "products": ["lib/libmpdec.a"]
+    },
+    {
+      "id": "openssl",
+      "input": "openssl",
+      "official_recipe": "CPython 3.13.14 build_universal_openssl options (no-idea no-mdc2 no-rc5 no-zlib no-ssl3) with no-shared instead of shared, one architecture, build_sw instead of all",
+      "steps": [
+        ["perl", "Configure", "darwin64-arm64-cc", "no-idea", "no-mdc2", "no-rc5", "no-zlib", "no-ssl3", "no-shared", "--prefix={prefix}/openssl", "--openssldir={prefix}/openssl/ssl"],
+        ["make", "-j{jobs}", "build_sw"],
+        ["make", "install_sw", "DESTDIR={root}"]
+      ],
+      "products": ["{root}{prefix}/openssl/lib/libssl.a", "{root}{prefix}/openssl/lib/libcrypto.a"]
+    }
+  ],
+  "cpython": {
+    "input": "cpython",
+    "official_recipe": "CPython 3.13.14 Mac/BuildScript/build-installer.py configure: --with-mimalloc=no --with-system-libmpdec --with-computed-gotos --without-ensurepip --with-openssl; framework, universal, PGO/LTO and -g are not used here",
+    "steps": [
+      ["./configure", "--prefix={prefix}/python", "--enable-shared", "--without-static-libpython", "--with-mimalloc=no", "--with-system-libmpdec", "--with-computed-gotos", "--without-ensurepip", "--with-openssl={root}{prefix}/openssl", "--with-pkg-config=no", "--disable-test-modules", "OPT=-O3 -Wall", "LDFLAGS=-Wl,-headerpad_max_install_names", "LIBLZMA_CFLAGS=-I{deps}/include", "LIBLZMA_LIBS=-L{deps}/lib -llzma", "LIBSQLITE3_CFLAGS=-I{deps}/include", "LIBSQLITE3_LIBS=-L{deps}/lib -lsqlite3", "LIBMPDEC_CFLAGS=-I{deps}/include", "LIBMPDEC_LIBS=-L{deps}/lib -lmpdec", "py_cv_module__tkinter=n/a", "py_cv_module__gdbm=n/a"],
+      ["make", "-j{jobs}"],
+      ["make", "install", "DESTDIR={root}"]
+    ],
+    "allowed_missing_modules": ["_tkinter", "_gdbm"],
+    "disabled_modules": ["_ctypes_test", "_testbuffer", "_testcapi", "_testclinic", "_testclinic_limited", "_testexternalinspection", "_testimportmultiple", "_testinternalcapi", "_testlimitedcapi", "_testmultiphase", "_testsinglephase", "_xxtestfuzz", "xxlimited", "xxlimited_35", "xxsubtype"],
+    "required_modules": ["_ssl", "_hashlib", "_sqlite3", "_lzma", "_bz2", "zlib", "_ctypes", "_decimal", "_json", "pyexpat", "_elementtree", "_socket", "select", "_uuid", "_blake2", "unicodedata", "_multiprocessing", "_asyncio"]
+  },
+  "packages": {
+    "build_order": ["setuptools", "packaging", "altgraph", "macholib", "pyinstaller-hooks-contrib", "pyinstaller", "certifi", "idna", "charset-normalizer", "urllib3", "requests", "brotli", "mutagen", "pycryptodomex", "websockets", "yt-dlp-ejs", "yt-dlp"],
+    "environment": {
+      "brotli": {"USE_SYSTEM_BROTLI": "0"},
+      "charset-normalizer": {"CHARSET_NORMALIZER_USE_CYTHON": "0"},
+      "websockets": {"BUILD_EXTENSION": "yes"},
+      "pyinstaller": {"PYI_PLATFORM": "Darwin-64bit"}
+    },
+    "native": ["brotli", "pycryptodomex", "websockets", "pyinstaller"]
+  },
+  "pyinstaller": {
+    "bootloader": {
+      "waf": ["--no-universal2", "configure", "all"],
+      "platform": "Darwin-64bit",
+      "outputs": ["run", "run_d", "runw", "runw_d"]
+    },
+    "arguments": ["--noconfirm", "--clean", "--onefile", "--name", "omd-yt-dlp", "--target-architecture", "arm64", "--collect-all", "yt_dlp", "--collect-all", "yt_dlp_ejs"]
+  },
+  "expected": {
+    "version": "2026.08.19",
+    "list_extractors_lines": 1752,
+    "ejs": {
+      "yt_dlp_ejs/yt/solver/core.min.js": "18da6ce0758b416e7ae645084f4f8801f9f9d59d6c477c05eaa0ff94ebd8cc00",
+      "yt_dlp_ejs/yt/solver/lib.min.js": "c55987fe697e5b9ee18830163f7af85327e9bb5c3e674b969d38c8d205eaa577"
+    },
+    "build_path_members": ["_sysconfigdata__darwin_darwin"]
+  }
+}

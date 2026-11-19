@@ -1,0 +1,8 @@
+# Standalone engine installation at the documented root-owned path.
+# The guardian installs Landlock/seccomp restrictions before running helpers.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile omd_v2_standalone_helper "/opt/omd-engine/bin/omd-helper-guardian" flags=(unconfined) {
+  userns,
+}

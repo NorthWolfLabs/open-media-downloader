@@ -1,0 +1,25 @@
+[package]
+name = "omd-plugins"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+omd-browser = { path = "../omd-browser" }
+omd-media = { path = "../omd-media" }
+omd-credentials = { path = "../omd-credentials" }
+omd-domain = { path = "../omd-domain" }
+omd-network = { path = "../omd-network" }
+tokio.workspace = true
+tokio-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+omd-network = { path = "../omd-network", features = ["fixture-tests"] }
+reqwest.workspace = true
+futures-util.workspace = true
+http = "1"
+tempfile.workspace = true

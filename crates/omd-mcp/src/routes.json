@@ -1,0 +1,1694 @@
+{
+  "lookup_acquisitions": {
+    "method": "POST",
+    "path": "/v2/acquisitions/status",
+    "scope": "read",
+    "params": [],
+    "body": "nested",
+    "response": "json",
+    "operation": "lookupAcquisitions"
+  },
+  "prepare_batch": {
+    "method": "POST",
+    "path": "/v2/batches",
+    "scope": "manage",
+    "params": [],
+    "body": "nested",
+    "response": "json",
+    "operation": "prepareBatch"
+  },
+  "list_batch_items": {
+    "method": "GET",
+    "path": "/v2/batches/{id}/items",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      },
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listBatchItems"
+  },
+  "list_browser_tools": {
+    "method": "GET",
+    "path": "/v2/browser-tools",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listBrowserTools"
+  },
+  "install_browser_tools": {
+    "method": "POST",
+    "path": "/v2/browser-tools/install",
+    "scope": "admin",
+    "params": [],
+    "body": "nested",
+    "response": "json",
+    "operation": "installBrowserTools"
+  },
+  "get_browser_tool_status": {
+    "method": "GET",
+    "path": "/v2/browser-tools/status",
+    "scope": "read",
+    "params": [],
+    "body": "none",
+    "response": "json",
+    "operation": "getBrowserToolStatus"
+  },
+  "get_browser_tool": {
+    "method": "GET",
+    "path": "/v2/browser-tools/{id}",
+    "scope": "read",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "getBrowserTool"
+  },
+  "activate_browser_tools": {
+    "method": "POST",
+    "path": "/v2/browser-tools/{id}/activate",
+    "scope": "admin",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "activateBrowserTools"
+  },
+  "retry_browser_tool_cleanup": {
+    "method": "POST",
+    "path": "/v2/browser-tools/{id}/cleanup",
+    "scope": "admin",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "retryBrowserToolCleanup"
+  },
+  "remove_browser_tools": {
+    "method": "POST",
+    "path": "/v2/browser-tools/{id}/remove",
+    "scope": "admin",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "nested",
+    "response": "json",
+    "operation": "removeBrowserTools"
+  },
+  "list_destination_checks": {
+    "method": "GET",
+    "path": "/v2/destination-checks",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listDestinationChecks"
+  },
+  "get_destination_check": {
+    "method": "GET",
+    "path": "/v2/destination-checks/{id}",
+    "scope": "read",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "getDestinationCheck"
+  },
+  "list_destination_check_files": {
+    "method": "GET",
+    "path": "/v2/destination-checks/{id}/files",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      },
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listDestinationCheckFiles"
+  },
+  "control_destination_check": {
+    "method": "POST",
+    "path": "/v2/destination-checks/{id}/{action}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      },
+      {
+        "key": "action",
+        "name": "action",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "controlDestinationCheck"
+  },
+  "list_destinations": {
+    "method": "GET",
+    "path": "/v2/destinations",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listDestinations"
+  },
+  "add_destination": {
+    "method": "POST",
+    "path": "/v2/destinations",
+    "scope": "manage",
+    "params": [],
+    "body": "nested",
+    "response": "json",
+    "operation": "addDestination"
+  },
+  "ensure_default_destination": {
+    "method": "POST",
+    "path": "/v2/destinations/default",
+    "scope": "manage",
+    "params": [],
+    "body": "none",
+    "response": "json",
+    "operation": "ensureDefaultDestination"
+  },
+  "get_destination": {
+    "method": "GET",
+    "path": "/v2/destinations/{id}",
+    "scope": "read",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "getDestination"
+  },
+  "check_destination": {
+    "method": "POST",
+    "path": "/v2/destinations/{id}/check",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "checkDestination"
+  },
+  "reconnect_destination": {
+    "method": "POST",
+    "path": "/v2/destinations/{id}/reconnect",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "nested",
+    "response": "json",
+    "operation": "reconnectDestination"
+  },
+  "relocate_destination": {
+    "method": "POST",
+    "path": "/v2/destinations/{id}/relocate",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "nested",
+    "response": "json",
+    "operation": "relocateDestination"
+  },
+  "follow_events": {
+    "method": "GET",
+    "path": "/v2/events",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "events",
+    "operation": "followEvents"
+  },
+  "list_file_operations": {
+    "method": "GET",
+    "path": "/v2/file-operations",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listFileOperations"
+  },
+  "get_file_operation": {
+    "method": "GET",
+    "path": "/v2/file-operations/{id}",
+    "scope": "read",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "getFileOperation"
+  },
+  "list_file_operation_entries": {
+    "method": "GET",
+    "path": "/v2/file-operations/{id}/files",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      },
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listFileOperationEntries"
+  },
+  "control_file_operation": {
+    "method": "POST",
+    "path": "/v2/file-operations/{id}/{action}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      },
+      {
+        "key": "action",
+        "name": "action",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "controlFileOperation"
+  },
+  "list_groups": {
+    "method": "GET",
+    "path": "/v2/groups",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      },
+      {
+        "key": "state",
+        "name": "state",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listGroups"
+  },
+  "get_group": {
+    "method": "GET",
+    "path": "/v2/groups/{id}",
+    "scope": "read",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "getGroup"
+  },
+  "list_group_jobs": {
+    "method": "GET",
+    "path": "/v2/groups/{id}/jobs",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      },
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listGroupJobs"
+  },
+  "control_group": {
+    "method": "POST",
+    "path": "/v2/groups/{id}/{action}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      },
+      {
+        "key": "action",
+        "name": "action",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "controlGroup"
+  },
+  "list_inbox": {
+    "method": "GET",
+    "path": "/v2/inbox",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listInbox"
+  },
+  "control_inbox_item": {
+    "method": "POST",
+    "path": "/v2/inbox/{id}/{action}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      },
+      {
+        "key": "action",
+        "name": "action",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "controlInboxItem"
+  },
+  "list_jobs": {
+    "method": "GET",
+    "path": "/v2/jobs",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      },
+      {
+        "key": "state",
+        "name": "state",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listJobs"
+  },
+  "submit_preparation": {
+    "method": "POST",
+    "path": "/v2/jobs",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "idempotency_key",
+        "name": "Idempotency-Key",
+        "location": "header"
+      }
+    ],
+    "body": "flat",
+    "response": "json",
+    "operation": "enqueueAcquisition"
+  },
+  "inspect_job": {
+    "method": "GET",
+    "path": "/v2/jobs/{id}",
+    "scope": "read",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "getJob"
+  },
+  "create_file_operation": {
+    "method": "POST",
+    "path": "/v2/jobs/{id}/file-operations",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "nested",
+    "response": "json",
+    "operation": "createFileOperation"
+  },
+  "list_artifacts": {
+    "method": "GET",
+    "path": "/v2/jobs/{id}/files",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      },
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listArtifacts"
+  },
+  "get_artifact": {
+    "method": "GET",
+    "path": "/v2/jobs/{id}/files/{artifact}",
+    "scope": "read",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      },
+      {
+        "key": "artifact",
+        "name": "artifact",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "getArtifact"
+  },
+  "job_action": {
+    "method": "POST",
+    "path": "/v2/jobs/{id}/{action}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      },
+      {
+        "key": "action",
+        "name": "action",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "controlJob"
+  },
+  "set_metadata_override": {
+    "method": "PUT",
+    "path": "/v2/metadata/{kind}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "kind",
+        "name": "kind",
+        "location": "path"
+      }
+    ],
+    "body": "nested",
+    "response": "json",
+    "operation": "setMetadataOverride"
+  },
+  "get_metadata_override": {
+    "method": "GET",
+    "path": "/v2/metadata/{kind}/{provider}",
+    "scope": "read",
+    "params": [
+      {
+        "key": "source_id",
+        "name": "source_id",
+        "location": "query"
+      },
+      {
+        "key": "kind",
+        "name": "kind",
+        "location": "path"
+      },
+      {
+        "key": "provider",
+        "name": "provider",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "getMetadataOverride"
+  },
+  "get_naming_templates": {
+    "method": "GET",
+    "path": "/v2/naming",
+    "scope": "read",
+    "params": [],
+    "body": "none",
+    "response": "json",
+    "operation": "getNamingTemplates"
+  },
+  "set_naming_templates": {
+    "method": "PUT",
+    "path": "/v2/naming",
+    "scope": "manage",
+    "params": [],
+    "body": "nested",
+    "response": "json",
+    "operation": "setNamingTemplates"
+  },
+  "get_notification_status": {
+    "method": "GET",
+    "path": "/v2/notifications",
+    "scope": "read",
+    "params": [],
+    "body": "none",
+    "response": "json",
+    "operation": "getNotificationStatus"
+  },
+  "configure_notifications": {
+    "method": "PUT",
+    "path": "/v2/notifications",
+    "scope": "manage",
+    "params": [],
+    "body": "nested",
+    "response": "json",
+    "operation": "configureNotifications"
+  },
+  "list_notification_history": {
+    "method": "GET",
+    "path": "/v2/notifications/history",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listNotificationHistory"
+  },
+  "control_notification": {
+    "method": "POST",
+    "path": "/v2/notifications/history/{id}/{action}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      },
+      {
+        "key": "action",
+        "name": "action",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "controlNotification"
+  },
+  "test_notification": {
+    "method": "POST",
+    "path": "/v2/notifications/test",
+    "scope": "manage",
+    "params": [],
+    "body": "none",
+    "response": "json",
+    "operation": "testNotification"
+  },
+  "list_operations": {
+    "method": "GET",
+    "path": "/v2/operations",
+    "scope": "read",
+    "params": [],
+    "body": "none",
+    "response": "json",
+    "operation": "listOperations"
+  },
+  "prepare_releases": {
+    "method": "POST",
+    "path": "/v2/preparations",
+    "scope": "manage",
+    "params": [],
+    "body": "flat",
+    "response": "json",
+    "operation": "prepareAcquisition"
+  },
+  "list_relocations": {
+    "method": "GET",
+    "path": "/v2/relocations",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listRelocations"
+  },
+  "get_relocation": {
+    "method": "GET",
+    "path": "/v2/relocations/{id}",
+    "scope": "read",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "getRelocation"
+  },
+  "list_relocation_files": {
+    "method": "GET",
+    "path": "/v2/relocations/{id}/files",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      },
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listRelocationFiles"
+  },
+  "control_relocation": {
+    "method": "POST",
+    "path": "/v2/relocations/{id}/{action}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      },
+      {
+        "key": "action",
+        "name": "action",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "controlRelocation"
+  },
+  "list_selections": {
+    "method": "GET",
+    "path": "/v2/selections",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listSelections"
+  },
+  "get_selection": {
+    "method": "GET",
+    "path": "/v2/selections/{id}",
+    "scope": "read",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "getSelection"
+  },
+  "control_selection": {
+    "method": "POST",
+    "path": "/v2/selections/{id}/{action}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      },
+      {
+        "key": "action",
+        "name": "action",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "controlSelection"
+  },
+  "service_status": {
+    "method": "GET",
+    "path": "/v2/service",
+    "scope": "read",
+    "params": [],
+    "body": "none",
+    "response": "json",
+    "operation": "getService"
+  },
+  "shutdown_service": {
+    "method": "POST",
+    "path": "/v2/service/shutdown",
+    "scope": "admin",
+    "params": [
+      {
+        "key": "for_update",
+        "name": "for_update",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "shutdownService"
+  },
+  "get_settings": {
+    "method": "GET",
+    "path": "/v2/settings",
+    "scope": "read",
+    "params": [],
+    "body": "none",
+    "response": "json",
+    "operation": "getSettings"
+  },
+  "update_settings": {
+    "method": "PATCH",
+    "path": "/v2/settings",
+    "scope": "manage",
+    "params": [],
+    "body": "nested",
+    "response": "json",
+    "operation": "updateSettings"
+  },
+  "interact_with_sign_in": {
+    "method": "POST",
+    "path": "/v2/sign-ins/{id}/actions",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "owned",
+    "response": "json",
+    "operation": "interactWithSignIn"
+  },
+  "close_source_sign_in": {
+    "method": "POST",
+    "path": "/v2/sign-ins/{id}/close",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "owned",
+    "response": "json",
+    "operation": "closeSourceSignIn"
+  },
+  "complete_source_sign_in": {
+    "method": "POST",
+    "path": "/v2/sign-ins/{id}/complete",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "owned",
+    "response": "json",
+    "operation": "completeSourceSignIn"
+  },
+  "source_sign_in_status": {
+    "method": "POST",
+    "path": "/v2/sign-ins/{id}/status",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "owned",
+    "response": "json",
+    "operation": "sourceSignInStatus"
+  },
+  "create_snapshot": {
+    "method": "POST",
+    "path": "/v2/snapshots",
+    "scope": "manage",
+    "params": [],
+    "body": "nested",
+    "response": "json",
+    "operation": "createSnapshot"
+  },
+  "list_snapshot_releases": {
+    "method": "GET",
+    "path": "/v2/snapshots/{id}/releases",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      },
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listSnapshotReleases"
+  },
+  "list_source_catalog": {
+    "method": "GET",
+    "path": "/v2/source-catalog",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listSourceCatalog"
+  },
+  "list_source_removals": {
+    "method": "GET",
+    "path": "/v2/source-removals",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listSourceRemovals"
+  },
+  "get_source_removal": {
+    "method": "GET",
+    "path": "/v2/source-removals/{id}",
+    "scope": "read",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "getSourceRemoval"
+  },
+  "list_source_removal_entries": {
+    "method": "GET",
+    "path": "/v2/source-removals/{id}/entries",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      },
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listSourceRemovalEntries"
+  },
+  "retry_source_removal": {
+    "method": "POST",
+    "path": "/v2/source-removals/{id}/retry",
+    "scope": "admin",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "retrySourceRemoval"
+  },
+  "list_sources": {
+    "method": "GET",
+    "path": "/v2/sources",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listSources"
+  },
+  "install_source": {
+    "method": "POST",
+    "path": "/v2/sources/install",
+    "scope": "admin",
+    "params": [],
+    "body": "nested",
+    "response": "json",
+    "operation": "installSource"
+  },
+  "activate_source": {
+    "method": "POST",
+    "path": "/v2/sources/{id}/activate",
+    "scope": "admin",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "nested",
+    "response": "json",
+    "operation": "activateSource"
+  },
+  "get_artwork": {
+    "method": "GET",
+    "path": "/v2/sources/{id}/artwork",
+    "scope": "read",
+    "params": [
+      {
+        "key": "credential_profile",
+        "name": "credential_profile",
+        "location": "query"
+      },
+      {
+        "key": "url",
+        "name": "url",
+        "location": "query"
+      },
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "image",
+    "operation": "getArtwork"
+  },
+  "list_source_accounts": {
+    "method": "GET",
+    "path": "/v2/sources/{id}/credentials",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      },
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listSourceAccounts"
+  },
+  "revoke_source_account": {
+    "method": "DELETE",
+    "path": "/v2/sources/{id}/credentials/{profile}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      },
+      {
+        "key": "profile",
+        "name": "profile",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "revokeSourceAccount"
+  },
+  "save_source_account": {
+    "method": "PUT",
+    "path": "/v2/sources/{id}/credentials/{profile}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      },
+      {
+        "key": "profile",
+        "name": "profile",
+        "location": "path"
+      }
+    ],
+    "body": "nested",
+    "response": "json",
+    "operation": "saveSourceAccount"
+  },
+  "source_query": {
+    "method": "POST",
+    "path": "/v2/sources/{id}/invoke",
+    "scope": "read",
+    "params": [
+      {
+        "key": "provider",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "nested",
+    "response": "json",
+    "operation": "invokeSource"
+  },
+  "remove_source": {
+    "method": "POST",
+    "path": "/v2/sources/{id}/remove",
+    "scope": "admin",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "nested",
+    "response": "json",
+    "operation": "removeSource"
+  },
+  "start_source_sign_in": {
+    "method": "POST",
+    "path": "/v2/sources/{id}/sign-ins",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "owned",
+    "response": "json",
+    "operation": "startSourceSignIn"
+  },
+  "list_source_versions": {
+    "method": "GET",
+    "path": "/v2/sources/{id}/versions",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      },
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listSourceVersions"
+  },
+  "list_subscriptions": {
+    "method": "GET",
+    "path": "/v2/subscriptions",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listSubscriptions"
+  },
+  "create_subscription": {
+    "method": "POST",
+    "path": "/v2/subscriptions",
+    "scope": "manage",
+    "params": [],
+    "body": "nested",
+    "response": "json",
+    "operation": "createSubscription"
+  },
+  "update_subscription": {
+    "method": "PATCH",
+    "path": "/v2/subscriptions/{id}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "nested",
+    "response": "json",
+    "operation": "updateSubscription"
+  },
+  "control_subscription": {
+    "method": "POST",
+    "path": "/v2/subscriptions/{id}/{action}",
+    "scope": "manage",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      },
+      {
+        "key": "action",
+        "name": "action",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "controlSubscription"
+  },
+  "get_summary": {
+    "method": "GET",
+    "path": "/v2/summary",
+    "scope": "read",
+    "params": [],
+    "body": "none",
+    "response": "json",
+    "operation": "getSummary"
+  },
+  "list_tool_sets": {
+    "method": "GET",
+    "path": "/v2/tools",
+    "scope": "read",
+    "params": [
+      {
+        "key": "cursor",
+        "name": "cursor",
+        "location": "query"
+      },
+      {
+        "key": "limit",
+        "name": "limit",
+        "location": "query"
+      },
+      {
+        "key": "q",
+        "name": "q",
+        "location": "query"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "listToolSets"
+  },
+  "install_tool_set": {
+    "method": "POST",
+    "path": "/v2/tools/install",
+    "scope": "admin",
+    "params": [],
+    "body": "nested",
+    "response": "json",
+    "operation": "installToolSet"
+  },
+  "get_tool_status": {
+    "method": "GET",
+    "path": "/v2/tools/status",
+    "scope": "read",
+    "params": [],
+    "body": "none",
+    "response": "json",
+    "operation": "getToolStatus"
+  },
+  "get_tool_set": {
+    "method": "GET",
+    "path": "/v2/tools/{id}",
+    "scope": "read",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "getToolSet"
+  },
+  "activate_tool_set": {
+    "method": "POST",
+    "path": "/v2/tools/{id}/activate",
+    "scope": "admin",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "activateToolSet"
+  },
+  "remove_tool_set": {
+    "method": "POST",
+    "path": "/v2/tools/{id}/remove",
+    "scope": "admin",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "nested",
+    "response": "json",
+    "operation": "removeToolSet"
+  },
+  "retry_tool_cleanup": {
+    "method": "POST",
+    "path": "/v2/tools/{id}/retry-cleanup",
+    "scope": "admin",
+    "params": [
+      {
+        "key": "id",
+        "name": "id",
+        "location": "path"
+      }
+    ],
+    "body": "none",
+    "response": "json",
+    "operation": "retryToolCleanup"
+  },
+  "get_guidance": {
+    "method": "GET",
+    "path": "",
+    "scope": "read",
+    "params": [],
+    "body": "none",
+    "response": "guide",
+    "operation": "getGuidance"
+  }
+}

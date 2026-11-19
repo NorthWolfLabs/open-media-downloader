@@ -1,0 +1,1 @@
+{"api":"omd:provider@2.0.0","id":"org.example.conformance","name":"Conformance","version":"0.2.0","description":"Deterministic sandbox and SDK fixture","source_hosts":["example.com"],"capabilities":["search","identify"],"grants":[{"id":"metadata","hosts":["example.com"],"methods":["GET"],"credential":false}],"media_tools":false,"browser":false}

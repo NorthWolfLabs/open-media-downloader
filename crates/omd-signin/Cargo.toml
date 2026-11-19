@@ -1,0 +1,22 @@
+[package]
+name = "omd-signin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Engine-launched native sign-in window using the operating system web view"
+
+[[bin]]
+name = "omd-signin"
+path = "src/main.rs"
+
+[dependencies]
+omd-domain = { path = "../omd-domain" }
+omd-credentials = { path = "../omd-credentials" }
+serde_json.workspace = true
+url.workspace = true
+chrono.workspace = true
+zeroize = "1"
+# Same versions as the desktop shell's Tauri runtime. The window is a normal,
+# non-automated system web view: WKWebView, WebView2 or WebKitGTK.
+wry = { version = "=0.55.1", default-features = false, features = ["os-webview", "x11"] }
+tao = { version = "=0.35.3", default-features = false, features = ["rwh_06", "x11"] }

@@ -1,0 +1,63 @@
+[package]
+name = "omd-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+fixture-tests = ["omd-browser/fixture-tests", "omd-network/fixture-tests"]
+
+[[bin]]
+name = "omd-engine"
+path = "src/main.rs"
+
+[[bin]]
+name = "omd-openapi"
+path = "src/bin/omd-openapi.rs"
+
+[dependencies]
+directories = "6"
+omd-browser = { path = "../omd-browser" }
+omd-tools = { path = "../omd-tools" }
+omd-notifications = { path = "../omd-notifications" }
+schemars.workspace = true
+omd-files = { path = "../omd-files" }
+omd-storage = { path = "../omd-storage" }
+omd-lifecycle = { path = "../omd-lifecycle" }
+omd-media = { path = "../omd-media" }
+omd-credentials = { path = "../omd-credentials" }
+omd-domain = { path = "../omd-domain" }
+omd-store = { path = "../omd-store" }
+omd-network = { path = "../omd-network" }
+omd-plugins = { path = "../omd-plugins" }
+omd-acquisition = { path = "../omd-acquisition" }
+omd-subscriptions = { path = "../omd-subscriptions" }
+axum.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+clap.workspace = true
+fs2.workspace = true
+sha2.workspace = true
+reqwest.workspace = true
+anyhow.workspace = true
+futures-util.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+utoipa.workspace = true
+sqlx.workspace = true
+url.workspace = true
+tempfile.workspace = true
+zeroize = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
+
+[dev-dependencies]
+zeroize = "1"
+tempfile.workspace = true
+tower.workspace = true

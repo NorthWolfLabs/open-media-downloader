@@ -1,0 +1,62 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+license = "MIT"
+version = "0.2.1"
+edition = "2024"
+rust-version = "1.93"
+
+[workspace.dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+axum = { version = "0.8", features = ["macros"] }
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive", "env"] }
+fs2 = "0.4"
+futures-util = "0.3"
+hex = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+schemars = { version = "1", features = ["chrono04", "uuid1"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "macros"] }
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "limit"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = { version = "2", features = ["serde"] }
+utoipa = { version = "5", features = ["chrono", "uuid"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+wasmtime = { version = "=45.0.3", default-features = false, features = ["anyhow", "component-model", "cranelift", "parallel-compilation", "runtime", "cache", "std"] }
+zip = { version = "4", default-features = false, features = ["deflate"] }
+
+[profile.dev]
+debug = 1
+
+# ComponentizeJS bundles a JS interpreter. Optimize the compiler even during
+# engine development so compiling that component does not dominate each call.
+[profile.dev.package.cranelift-codegen]
+opt-level = 3
+[profile.dev.package.wasmparser]
+opt-level = 3
+[profile.dev.package.wasmtime-environ]
+opt-level = 3
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+strip = true
+
+# macOS can reject stripped proc-macro dylibs (observed with SQLx and Rust 1.93).
+# Preserve build-time symbols while retaining the shipped executables' settings.
+[profile.release.build-override]
+strip = "none"

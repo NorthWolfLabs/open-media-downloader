@@ -1,0 +1,93 @@
+name: Rust v2
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: v2-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  engine-and-sdk:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87
+        with:
+          toolchain: 1.93.0
+          components: rustfmt, clippy
+      - uses: voidzero-dev/setup-vp@07d0b0e993009eb3b908ea06e49e88e933b728a2 # v1.17.0
+        with:
+          version: 0.2.8
+          node-version: 24.20.0
+          run-install: false
+      - uses: astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca # v6.0.1
+      - name: Install locked provider SDK dependencies
+        working-directory: sdk/provider
+        run: vp install --frozen-lockfile
+      - name: Install locked client SDK dependencies
+        working-directory: sdk/client
+        run: vp install --frozen-lockfile
+      - name: Build pure TypeScript acceptance components
+        working-directory: sdk/provider
+        run: |
+          vp exec node bin/omd-plugin.mjs build ../../tests/v2-provider
+          vp exec node bin/omd-plugin.mjs build ../../tests/v2-acquisition-provider
+      - name: Build engine, CLI, worker and adapters
+        run: cargo build --workspace --bins --locked
+      - name: Verify native MCP stdio and public HTTP boundary
+        run: uv run scripts/test-mcp.py
+      - name: Verify manual update handover and profile preservation
+        run: uv run scripts/test-manual-updates.py
+      - name: Verify public integration and browser source checks
+        run: vp exec node --test scripts/browser-source.test.mjs scripts/integration-config.test.mjs scripts/source-fingerprint.test.mjs scripts/cargo-paths.test.mjs
+      - name: Verify published contract and SDK generation
+        run: vp exec node scripts/check-v2-contracts.mjs
+      - name: Check Rust formatting and diagnostics
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Authorize only the built guardian on this disposable Linux runner
+        if: runner.os == 'Linux'
+        run: |
+          uv run scripts/ci-linux-apparmor.py
+          sudo apparmor_parser -r -W target/omd-ci-helper.apparmor
+      - name: Run Rust invariants, recovery, scopes and native confinement
+        run: cargo test --workspace --all-targets --locked
+      - name: Check provider authoring types and conformance tooling
+        working-directory: sdk/provider
+        run: |
+          vp run check
+          vp run test
+      - name: Check independent-client types and transport
+        working-directory: sdk/client
+        run: |
+          vp run check
+          vp exec node --test test/http.test.mjs
+      - name: Verify standalone runtime archive fixtures
+        run: uv run scripts/test-package-runtime.py
+      - name: Verify public source and browser packaging fixtures
+        run: uv run scripts/test-public-distribution.py
+      - name: Verify the public engine build entry and path remapping
+        run: uv run scripts/test-build-public-engine.py
+      - name: Validate OpenAPI
+        run: uv run tests/v2-openapi.py
+      - name: Remove the disposable guardian policy
+        if: always() && runner.os == 'Linux'
+        run: |
+          if [ -f target/omd-ci-helper.apparmor ]; then
+            sudo apparmor_parser -R target/omd-ci-helper.apparmor
+          fi
+# This is development CI. Release approval additionally requires every packaged
+# platform journey, including ignored native browser/media fixtures and
+# clean-account installation. CI is not that evidence.

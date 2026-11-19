@@ -1,0 +1,185 @@
+{
+  "schema": "omd-macos-signing-policy-v1",
+  "layout": "tauri-v2-public-plugin-free",
+  "resources": "Contents/Resources/resources/v2",
+  "app_files": {
+    "required": ["Contents/Info.plist", "Contents/MacOS/{executable}", "Contents/Resources/{icon}"],
+    "optional": ["Contents/PkgInfo"],
+    "input_seal": "Contents/_CodeSignature/CodeResources"
+  },
+  "reviewed_entitlements": [
+    "com.apple.security.cs.allow-jit",
+    "com.apple.security.cs.allow-unsigned-executable-memory"
+  ],
+  "forbidden_entitlements": [
+    "com.apple.security.cs.allow-dyld-environment-variables",
+    "com.apple.security.cs.disable-executable-page-protection",
+    "com.apple.security.cs.disable-library-validation",
+    "com.apple.security.get-task-allow"
+  ],
+  "roles": [
+    {
+      "id": "desktop-shell",
+      "path": "Contents/MacOS/{executable}",
+      "filetype": "execute",
+      "sign": "outer-bundle",
+      "entitlements": {},
+      "binding": "desktop-executable",
+      "receipt": "desktop",
+      "basis": "Tauri/WKWebView shell. Tauri enables hardened runtime by default and adds no entitlements; WebKit JIT runs in system WebContent processes."
+    },
+    {
+      "id": "engine",
+      "path": "{resources}/bin/omd-engine",
+      "filetype": "execute",
+      "sign": "nested",
+      "entitlements": {},
+      "binding": "engine-bin",
+      "receipt": "engine",
+      "basis": "Rust service. Spawns helpers and talks to loopback HTTP; no JIT, no dlopen of non-system code, no runtime signature checks in current sources."
+    },
+    {
+      "id": "cli",
+      "path": "{resources}/bin/omd",
+      "filetype": "execute",
+      "sign": "nested",
+      "entitlements": {},
+      "binding": "engine-bin",
+      "receipt": "engine",
+      "basis": "HTTP-only Rust CLI."
+    },
+    {
+      "id": "helper-guardian",
+      "path": "{resources}/bin/omd-helper-guardian",
+      "filetype": "execute",
+      "sign": "nested",
+      "entitlements": {},
+      "binding": "engine-bin",
+      "receipt": "engine",
+      "basis": "Launches /usr/bin/sandbox-exec (a platform binary) for confined tools; needs no hardened-runtime exception."
+    },
+    {
+      "id": "notifier",
+      "path": "{resources}/bin/omd-notify",
+      "filetype": "execute",
+      "sign": "nested",
+      "entitlements": {},
+      "binding": "engine-bin",
+      "receipt": "engine",
+      "basis": "notify-rust user notification adapter; no Apple Events or JIT."
+    },
+    {
+      "id": "sign-in-window",
+      "path": "{resources}/bin/omd-signin",
+      "filetype": "execute",
+      "sign": "nested",
+      "entitlements": {},
+      "binding": "engine-bin",
+      "receipt": "engine",
+      "basis": "wry/tao native sign-in window. WKWebView runs page JavaScript in WebKit's own XPC services, so this host needs no JIT or unsigned-executable-memory exception."
+    },
+    {
+      "id": "plugin-worker",
+      "path": "{resources}/bin/omd-plugin-worker-v2",
+      "filetype": "execute",
+      "sign": "nested",
+      "entitlements": {"com.apple.security.cs.allow-unsigned-executable-memory": true},
+      "binding": "engine-bin",
+      "receipt": "engine",
+      "marker": "OMD_WORKER_PROFILE=release",
+      "basis": "Wasmtime 45.0.3 publishes compiled code with mprotect(READ|EXEC) on private anonymous or file mappings without MAP_JIT (src/runtime/vm/sys/unix/mmap.rs). Ad-hoc hardened probe of the current release worker: provider execution is killed with no entitlement and with allow-jit only; it runs with allow-unsigned-executable-memory."
+    },
+    {
+      "id": "node",
+      "path": "{resources}/tools/node/node",
+      "filetype": "execute",
+      "sign": "nested",
+      "entitlements": {"com.apple.security.cs.allow-jit": true},
+      "binding": "tool:node",
+      "basis": "V8 uses MAP_JIT on Apple silicon. Ad-hoc hardened probe of Node 24.20.0: aborts reserving its CodeRange without the entitlement; JS optimization and WebAssembly run with allow-jit only. The producer signature's broader entitlements (including get-task-allow and disable-library-validation) are not retained."
+    },
+    {
+      "id": "ffmpeg",
+      "path": "{resources}/tools/ffmpeg/ffmpeg",
+      "filetype": "execute",
+      "sign": "nested",
+      "entitlements": {},
+      "binding": "tool:ffmpeg",
+      "basis": "Statically built media tool; no JIT."
+    },
+    {
+      "id": "ffprobe",
+      "path": "{resources}/tools/ffprobe/ffprobe",
+      "filetype": "execute",
+      "sign": "nested",
+      "entitlements": {},
+      "binding": "tool:ffprobe",
+      "basis": "Statically built media tool; no JIT."
+    },
+    {
+      "id": "yt-dlp",
+      "path": "{resources}/tools/yt_dlp/yt-dlp_macos",
+      "filetype": "execute",
+      "sign": "prepared-extractor",
+      "entitlements": {},
+      "binding": "tool:yt_dlp",
+      "packed": "pyinstaller-carchive",
+      "basis": "PyInstaller onefile. Packed native members are extracted and loaded at runtime, so under hardened runtime library validation they must carry the signing Team ID. Re-signing only the outer bootloader does not change them. Disabling library validation is not reviewed."
+    },
+    {
+      "id": "browser",
+      "path": "{resources}/browser/content/browser/chrome-headless-shell",
+      "filetype": "execute",
+      "sign": "nested",
+      "entitlements": {"com.apple.security.cs.allow-jit": true},
+      "binding": "browser:browser",
+      "basis": "Single headless executable that also runs renderer and GPU process types. Chromium 153.0.8010.12 chrome/app/helper-renderer-entitlements.plist and helper-gpu-entitlements.plist grant only allow-jit."
+    },
+    {
+      "id": "browser-library",
+      "path": "{resources}/browser/content/browser/libEGL.dylib",
+      "filetype": "dylib",
+      "sign": "nested",
+      "entitlements": {},
+      "binding": "browser:file",
+      "basis": "Loaded by chrome-headless-shell with dlopen; libraries inherit the host's entitlements and must share its Team ID."
+    },
+    {
+      "id": "browser-library",
+      "path": "{resources}/browser/content/browser/libGLESv2.dylib",
+      "filetype": "dylib",
+      "sign": "nested",
+      "entitlements": {},
+      "binding": "browser:file",
+      "basis": "Loaded by chrome-headless-shell with dlopen."
+    },
+    {
+      "id": "browser-library",
+      "path": "{resources}/browser/content/browser/libvk_swiftshader.dylib",
+      "filetype": "dylib",
+      "sign": "nested",
+      "entitlements": {},
+      "binding": "browser:file",
+      "basis": "Loaded by chrome-headless-shell with dlopen."
+    },
+    {
+      "id": "browser-library",
+      "path": "{resources}/browser/content/browser/libvulkan.dylib",
+      "filetype": "dylib",
+      "sign": "nested",
+      "entitlements": {},
+      "binding": "browser:file",
+      "basis": "Loaded by chrome-headless-shell with dlopen."
+    }
+  ],
+  "sources": [
+    "https://developer.apple.com/documentation/security/hardened-runtime",
+    "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.cs.allow-jit",
+    "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.cs.allow-unsigned-executable-memory",
+    "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.cs.disable-library-validation",
+    "https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac",
+    "https://developer.apple.com/documentation/security/resolving-common-notarization-issues",
+    "https://pyinstaller.org/en/stable/feature-notes.html",
+    "https://v2.tauri.app/reference/config/"
+  ]
+}

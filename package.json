@@ -1,0 +1,14 @@
+{
+  "name": "omd-public-development",
+  "version": "0.2.1",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "12.2.2",
+      "onFail": "download"
+    }
+  }
+}

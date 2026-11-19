@@ -1,0 +1,1977 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Contracts",
+  "type": "object",
+  "properties": {
+    "artifact": {
+      "$ref": "#/$defs/Artifact"
+    },
+    "artwork": {
+      "$ref": "#/$defs/Artwork"
+    },
+    "collection": {
+      "$ref": "#/$defs/Collection"
+    },
+    "collection_details": {
+      "$ref": "#/$defs/CollectionDetails"
+    },
+    "destination": {
+      "$ref": "#/$defs/Destination"
+    },
+    "discovery": {
+      "$ref": "#/$defs/DiscoverySchema"
+    },
+    "event": {
+      "$ref": "#/$defs/Event"
+    },
+    "identified_source": {
+      "$ref": "#/$defs/IdentifiedSource"
+    },
+    "job": {
+      "$ref": "#/$defs/Job"
+    },
+    "naming_templates": {
+      "$ref": "#/$defs/NamingTemplates"
+    },
+    "problem": {
+      "$ref": "#/$defs/Problem"
+    },
+    "provider_manifest": {
+      "$ref": "#/$defs/ProviderManifest"
+    },
+    "provider_request": {
+      "$ref": "#/$defs/ProviderRequest"
+    },
+    "release": {
+      "$ref": "#/$defs/Release"
+    },
+    "resolved_release": {
+      "$ref": "#/$defs/ResolvedRelease"
+    },
+    "subscription": {
+      "$ref": "#/$defs/Subscription"
+    }
+  },
+  "required": [
+    "discovery",
+    "collection_details",
+    "artwork",
+    "naming_templates",
+    "identified_source",
+    "artifact",
+    "collection",
+    "release",
+    "resolved_release",
+    "provider_request",
+    "provider_manifest",
+    "job",
+    "subscription",
+    "destination",
+    "event",
+    "problem"
+  ],
+  "$defs": {
+    "AccountMode": {
+      "type": "string",
+      "enum": [
+        "browser",
+        "cookies",
+        "header"
+      ]
+    },
+    "ActionPolicy": {
+      "type": "string",
+      "enum": [
+        "notify",
+        "download"
+      ]
+    },
+    "Artifact": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "job_id": {
+          "type": "string"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "status": {
+          "$ref": "#/$defs/FileStatus"
+        }
+      },
+      "required": [
+        "id",
+        "job_id",
+        "relative_path",
+        "size",
+        "sha256",
+        "media_type",
+        "status"
+      ]
+    },
+    "Artwork": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "locale": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "url"
+      ]
+    },
+    "ArtworkLayout": {
+      "description": "Source-provided artwork geometry and collection navigation.",
+      "type": "string",
+      "enum": [
+        "portrait",
+        "landscape",
+        "square",
+        "banner"
+      ]
+    },
+    "Availability": {
+      "type": "string",
+      "enum": [
+        "available",
+        "external",
+        "authentication_required",
+        "unavailable",
+        "unknown"
+      ]
+    },
+    "Collection": {
+      "type": "object",
+      "properties": {
+        "artwork_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "canonical_url": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/CollectionKind"
+        },
+        "reference": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CollectionSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "title",
+        "kind",
+        "canonical_url"
+      ]
+    },
+    "CollectionDetails": {
+      "type": "object",
+      "properties": {
+        "alternative_titles": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "creators": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MetadataField"
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "facts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MetadataField"
+          }
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "recommendation_basis": {
+          "description": "Honest explanation of source-provided or similarity-based recommendations.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reference": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiscoveryOption"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "alternative_titles",
+        "creators",
+        "tags",
+        "facts",
+        "languages"
+      ]
+    },
+    "CollectionKind": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "manga",
+            "playlist",
+            "channel"
+          ]
+        },
+        {
+          "description": "A standalone media item with no declared parent collection.",
+          "type": "string",
+          "const": "item"
+        }
+      ]
+    },
+    "CollectionLink": {
+      "description": "Small, source-provided discovery facts. No executable presentation or social actions.",
+      "type": "object",
+      "properties": {
+        "canonical_url": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CollectionKind"
+        },
+        "reference": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "title",
+        "kind",
+        "canonical_url"
+      ]
+    },
+    "CollectionSection": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/CollectionSectionKind"
+        },
+        "label": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/SourceRef"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "label",
+        "kind"
+      ]
+    },
+    "CollectionSectionKind": {
+      "type": "string",
+      "enum": [
+        "releases",
+        "collections"
+      ]
+    },
+    "CollectionSummary": {
+      "type": "object",
+      "properties": {
+        "artwork_layout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtworkLayout"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "avatar_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "banner_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_rating": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_rating_appearance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelAppearance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "creator_links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CreatorLink"
+          }
+        },
+        "creators": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "duration_seconds": {
+          "description": "Duration and audience facts supplied by a media source, including flat listings.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "followers": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "handle": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "image": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImageSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "languages": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "original_language": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parent": {
+          "description": "The containing collection, such as the channel that published a video.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CollectionLink"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "published_label": {
+          "description": "Source display text (for example “2 hours ago”); never treated as an exact date.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rating": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "rating_max": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CollectionSection"
+          }
+        },
+        "status": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status_appearance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelAppearance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tag_appearances": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/LabelAppearance"
+          }
+        },
+        "tags": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "video_count_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "view_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "year": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "CreatorLink": {
+      "type": "object",
+      "properties": {
+        "collection": {
+          "$ref": "#/$defs/CollectionLink"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "collection"
+      ]
+    },
+    "Destination": {
+      "type": "object",
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "storage_operation": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "root",
+        "available"
+      ]
+    },
+    "DiscoveryFilter": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "multiple": {
+          "type": "boolean"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiscoveryOption"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "multiple",
+        "options"
+      ]
+    },
+    "DiscoveryOption": {
+      "type": "object",
+      "properties": {
+        "appearance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelAppearance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label"
+      ]
+    },
+    "DiscoveryQuery": {
+      "type": "object",
+      "properties": {
+        "feed": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "default": {}
+        },
+        "sort": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DiscoverySchema": {
+      "type": "object",
+      "properties": {
+        "feeds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiscoveryOption"
+          }
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiscoveryFilter"
+          }
+        },
+        "sorts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiscoveryOption"
+          }
+        },
+        "tag_search": {
+          "description": "Query this discovery operation with a query (including empty for popular tags).",
+          "type": "boolean"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DiscoveryOption"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "filters",
+        "sorts",
+        "feeds"
+      ]
+    },
+    "Event": {
+      "type": "object",
+      "properties": {
+        "created_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "resource_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "resource_id",
+        "created_at"
+      ]
+    },
+    "FileStatus": {
+      "type": "string",
+      "enum": [
+        "present",
+        "missing",
+        "modified",
+        "detached",
+        "destination_unavailable"
+      ]
+    },
+    "HostGrant": {
+      "type": "object",
+      "properties": {
+        "credential": {
+          "type": "boolean"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "methods": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "request_intervals": {
+          "description": "Additional pacing for upstream endpoints with a stricter limit than ordinary browsing.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "hosts",
+        "methods",
+        "credential"
+      ]
+    },
+    "IdentifiedSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "collection"
+            },
+            "reference": {
+              "$ref": "#/$defs/SourceRef"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "reference"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "release"
+            },
+            "reference": {
+              "$ref": "#/$defs/SourceRef"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "reference"
+          ]
+        }
+      ]
+    },
+    "ImageSummary": {
+      "description": "A downloadable image post. One release contains every image in the post.",
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "count": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "height": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "previews": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "release_id": {
+          "type": "string"
+        },
+        "width": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "release_id",
+        "count"
+      ]
+    },
+    "Job": {
+      "type": "object",
+      "properties": {
+        "acquisition_key": {
+          "type": "string"
+        },
+        "attempt": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "bytes_done": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "bytes_total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "destination_id": {
+          "type": "string"
+        },
+        "group_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "issue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Problem"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "plan": {
+          "$ref": "#/$defs/Plan"
+        },
+        "state": {
+          "$ref": "#/$defs/JobState"
+        },
+        "title": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "acquisition_key",
+        "title",
+        "destination_id",
+        "state",
+        "plan",
+        "bytes_done",
+        "attempt",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "JobState": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "resolving",
+        "transferring",
+        "verifying",
+        "publishing",
+        "completed",
+        "paused",
+        "failed",
+        "canceled"
+      ]
+    },
+    "LabelAppearance": {
+      "description": "A source's label color, never arbitrary CSS or executable presentation.",
+      "type": "object",
+      "properties": {
+        "color": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "color"
+      ]
+    },
+    "Locator": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "credential_profile": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "default": {}
+            },
+            "kind": {
+              "type": "string",
+              "const": "http"
+            },
+            "permission": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "url",
+            "permission"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "credential_profile": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "type": "string",
+              "const": "media"
+            },
+            "permission": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "url",
+            "permission"
+          ]
+        }
+      ]
+    },
+    "LogicalOutput": {
+      "type": "object",
+      "properties": {
+        "expected_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected_size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "id": {
+          "type": "string"
+        },
+        "locator": {
+          "$ref": "#/$defs/Locator"
+        },
+        "media_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "position": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "relative_path": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "position",
+        "relative_path",
+        "role",
+        "locator"
+      ]
+    },
+    "MediaSelection": {
+      "type": "object",
+      "properties": {
+        "duration_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "ffmpeg_digest": {
+          "type": "string"
+        },
+        "ffprobe_digest": {
+          "type": "string"
+        },
+        "format_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "node_digest": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "selected_height": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "source_signature": {
+          "type": "string"
+        },
+        "subtitles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "yt_dlp_digest": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source_signature",
+        "format_ids",
+        "subtitles",
+        "yt_dlp_digest",
+        "ffmpeg_digest",
+        "ffprobe_digest"
+      ]
+    },
+    "MetadataField": {
+      "type": "object",
+      "properties": {
+        "appearance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LabelAppearance"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "label": {
+          "type": "string"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "values"
+      ]
+    },
+    "MetadataOverride": {
+      "type": "object",
+      "properties": {
+        "chapter": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "volume": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
+    "NamingTemplates": {
+      "type": "object",
+      "properties": {
+        "collection": {
+          "type": "string",
+          "default": "{title}"
+        },
+        "release": {
+          "type": "string",
+          "default": "{title}"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ObservationProgress": {
+      "type": "object",
+      "properties": {
+        "processed": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "source_digest": {
+          "type": "string"
+        },
+        "started_at": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "processed",
+        "started_at",
+        "source_digest"
+      ]
+    },
+    "OutputMetadata": {
+      "type": "object",
+      "properties": {
+        "collection": {
+          "$ref": "#/$defs/MetadataOverride",
+          "default": {
+            "chapter": null,
+            "description": null,
+            "title": null,
+            "volume": null
+          }
+        },
+        "release": {
+          "$ref": "#/$defs/MetadataOverride",
+          "default": {
+            "chapter": null,
+            "description": null,
+            "title": null,
+            "volume": null
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Plan": {
+      "type": "object",
+      "properties": {
+        "collection": {
+          "$ref": "#/$defs/Collection"
+        },
+        "credential_profile": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "expires_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "final_relative_path": {
+          "type": "string"
+        },
+        "generation": {
+          "description": "Artifact-set version, assigned by the engine before confirmation.",
+          "type": "integer",
+          "format": "uint32",
+          "default": 0,
+          "minimum": 0
+        },
+        "media": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MediaSelection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "metadata": {
+          "$ref": "#/$defs/OutputMetadata",
+          "default": {
+            "collection": {
+              "chapter": null,
+              "description": null,
+              "title": null,
+              "volume": null
+            },
+            "release": {
+              "chapter": null,
+              "description": null,
+              "title": null,
+              "volume": null
+            }
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LogicalOutput"
+          }
+        },
+        "policy": {
+          "$ref": "#/$defs/SelectionPolicy"
+        },
+        "provider_digest": {
+          "type": "string"
+        },
+        "recipe": {
+          "$ref": "#/$defs/Recipe"
+        },
+        "release": {
+          "$ref": "#/$defs/Release"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "release",
+        "collection",
+        "recipe",
+        "policy",
+        "outputs",
+        "final_relative_path",
+        "provider_digest"
+      ]
+    },
+    "Problem": {
+      "type": "object",
+      "properties": {
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable",
+        "actions"
+      ]
+    },
+    "ProviderManifest": {
+      "type": "object",
+      "properties": {
+        "account_mode": {
+          "description": "Preferred reference-UI connection method. Imports store credentials without\nasserting authentication; browser completion remains engine-owned.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccountMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "api": {
+          "type": "string"
+        },
+        "browser": {
+          "type": "boolean",
+          "default": false
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "description": {
+          "type": "string"
+        },
+        "grants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HostGrant"
+          }
+        },
+        "id": {
+          "type": "string"
+        },
+        "media_tools": {
+          "type": "boolean",
+          "default": false
+        },
+        "name": {
+          "type": "string"
+        },
+        "sign_in": {
+          "description": "Used only by the interactive engine-owned sign-in browser. These grants\nare never handed to source HTTP, media, or browser broker operations.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SignIn"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "api",
+        "id",
+        "name",
+        "version",
+        "description",
+        "source_hosts",
+        "capabilities",
+        "grants"
+      ]
+    },
+    "ProviderRequest": {
+      "type": "object",
+      "properties": {
+        "credential_profile": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "discovery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DiscoveryQuery"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "now": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "page_size": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "policy": {
+          "$ref": "#/$defs/SelectionPolicy"
+        },
+        "query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "release_order": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReleaseOrder"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "page_size",
+        "policy",
+        "now"
+      ]
+    },
+    "Recipe": {
+      "type": "string",
+      "enum": [
+        "cbz",
+        "image_folder",
+        "original_images",
+        "mp4",
+        "mkv",
+        "webm",
+        "m4a",
+        "mp3",
+        "opus"
+      ]
+    },
+    "Release": {
+      "type": "object",
+      "properties": {
+        "availability": {
+          "$ref": "#/$defs/Availability"
+        },
+        "canonical_url": {
+          "type": "string"
+        },
+        "chapter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "collection": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "position": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "preview": {
+          "description": "Metadata for browsing the release without fetching each item's details.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Collection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "published_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reference": {
+          "$ref": "#/$defs/SourceRef"
+        },
+        "revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "unavailable_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "collection",
+        "title",
+        "canonical_url",
+        "availability",
+        "position"
+      ]
+    },
+    "ReleaseOrder": {
+      "description": "Explicit chapter browsing order. Absent for complete acquisition/subscription scans.",
+      "type": "string",
+      "enum": [
+        "asc",
+        "desc"
+      ]
+    },
+    "ResolvedRelease": {
+      "type": "object",
+      "properties": {
+        "collection": {
+          "$ref": "#/$defs/Collection"
+        },
+        "expires_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "release": {
+          "$ref": "#/$defs/Release"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Resource"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "release",
+        "collection",
+        "resources"
+      ]
+    },
+    "Resource": {
+      "type": "object",
+      "properties": {
+        "expected_sha256": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected_size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "id": {
+          "type": "string"
+        },
+        "locator": {
+          "$ref": "#/$defs/Locator"
+        },
+        "media_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "position": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "position",
+        "role",
+        "locator"
+      ]
+    },
+    "SelectionPolicy": {
+      "type": "object",
+      "properties": {
+        "automatic_subtitles": {
+          "type": "boolean",
+          "default": false
+        },
+        "groups": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "languages": {
+          "type": "array",
+          "default": [
+            "en"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "max_height": {
+          "type": "integer",
+          "format": "uint32",
+          "default": 1080,
+          "minimum": 0
+        },
+        "subtitle_languages": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SignIn": {
+      "type": "object",
+      "properties": {
+        "completion_cookies": {
+          "description": "Cookie names required before saving an authenticated source session.\nValues stay inside the engine and are never exposed to plugins or clients.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "grants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HostGrant"
+          }
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "url",
+        "grants"
+      ]
+    },
+    "SourceRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "id"
+      ]
+    },
+    "SubscribeRequest": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/ActionPolicy"
+        },
+        "credential_profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "destination_id": {
+          "type": "string"
+        },
+        "include_existing": {
+          "type": "boolean"
+        },
+        "interval_minutes": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "name": {
+          "description": "Optional name shown in subscriptions, independent of the source title.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policy": {
+          "$ref": "#/$defs/SelectionPolicy"
+        },
+        "recipe": {
+          "$ref": "#/$defs/Recipe"
+        },
+        "search": {
+          "description": "Saved discovery input. Search subscriptions observe matching items, not their releases.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SubscriptionSearch"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/SourceRef"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "policy",
+        "action",
+        "destination_id",
+        "recipe",
+        "include_existing",
+        "interval_minutes"
+      ]
+    },
+    "Subscription": {
+      "type": "object",
+      "properties": {
+        "current_check": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ObservationProgress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "initialized": {
+          "type": "boolean"
+        },
+        "issue": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Problem"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last_success": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "next_check": {
+          "type": "string"
+        },
+        "request": {
+          "$ref": "#/$defs/SubscribeRequest"
+        },
+        "title": {
+          "description": "Cached source collection title with any user title override applied.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "request",
+        "enabled",
+        "initialized",
+        "next_check"
+      ]
+    },
+    "SubscriptionSearch": {
+      "type": "object",
+      "properties": {
+        "discovery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DiscoveryQuery"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "query": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "query"
+      ]
+    }
+  }
+}

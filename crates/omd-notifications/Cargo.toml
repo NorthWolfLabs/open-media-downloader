@@ -1,0 +1,27 @@
+[package]
+name = "omd-notifications"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+omd-store = { path = "../omd-store" }
+omd-domain = { path = "../omd-domain" }
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+notify-rust = "=4.18.0"
+
+[features]
+# omd-notify registers alerts under the public app identity labs.northwolf.omd by
+# default. Development packages built for labs.northwolf.omd-v2-development enable
+# this trusted build-time selection; nothing at runtime can choose the identity.
+development-identity = []
+
+[dev-dependencies]
+tempfile.workspace = true

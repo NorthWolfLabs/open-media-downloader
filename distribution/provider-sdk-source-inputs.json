@@ -1,0 +1,158 @@
+{
+  "format": 2,
+  "files": [
+    {
+      "source": ".node-version",
+      "destination": ".node-version"
+    },
+    {
+      "source": "distribution/provider-sdk-source.Cargo.lock",
+      "destination": "Cargo.lock"
+    },
+    {
+      "source": "distribution/provider-sdk-source.Cargo.toml",
+      "destination": "Cargo.toml"
+    },
+    {
+      "source": "LICENSE",
+      "destination": "LICENSE"
+    },
+    {
+      "source": "distribution/README.provider-sdk-source.md",
+      "destination": "README.md"
+    },
+    {
+      "source": "crates/omd-component-snapshot/Cargo.toml",
+      "destination": "crates/omd-component-snapshot/Cargo.toml"
+    },
+    {
+      "source": "crates/omd-component-snapshot/src/lib.rs",
+      "destination": "crates/omd-component-snapshot/src/lib.rs"
+    },
+    {
+      "source": "crates/omd-component-snapshot/src/main.rs",
+      "destination": "crates/omd-component-snapshot/src/main.rs"
+    },
+    {
+      "source": "rust-toolchain.toml",
+      "destination": "rust-toolchain.toml"
+    },
+    {
+      "source": "scripts/rebuild-snapshot-tool.py",
+      "destination": "scripts/rebuild-snapshot-tool.py"
+    },
+    {
+      "source": "sdk/provider/LICENSE",
+      "destination": "sdk/provider/LICENSE"
+    },
+    {
+      "source": "sdk/provider/README.md",
+      "destination": "sdk/provider/README.md"
+    },
+    {
+      "source": "sdk/provider/bin/componentize-deterministic.mjs",
+      "destination": "sdk/provider/bin/componentize-deterministic.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/diagnostics.mjs",
+      "destination": "sdk/provider/bin/diagnostics.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/generate-contracts.mjs",
+      "destination": "sdk/provider/bin/generate-contracts.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/omd-plugin.mjs",
+      "destination": "sdk/provider/bin/omd-plugin.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/process.mjs",
+      "destination": "sdk/provider/bin/process.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/sdk-package.mjs",
+      "destination": "sdk/provider/bin/sdk-package.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/testing.d.mts",
+      "destination": "sdk/provider/bin/testing.d.mts"
+    },
+    {
+      "source": "sdk/provider/bin/testing.mjs",
+      "destination": "sdk/provider/bin/testing.mjs"
+    },
+    {
+      "source": "sdk/provider/bin/windows-job.ps1",
+      "destination": "sdk/provider/bin/windows-job.ps1"
+    },
+    {
+      "source": "sdk/provider/build-tool/README.md",
+      "destination": "sdk/provider/build-tool/README.md"
+    },
+    {
+      "source": "sdk/provider/build-tool/THIRD_PARTY_NOTICES.txt",
+      "destination": "sdk/provider/build-tool/THIRD_PARTY_NOTICES.txt"
+    },
+    {
+      "source": "sdk/provider/build-tool/omd-component-snapshot.wasm",
+      "destination": "sdk/provider/build-tool/omd-component-snapshot.wasm",
+      "sha256": "c57a72dff894df82a557d5b37063e94a1b760bcea6ee1e4e78db1f875357f826"
+    },
+    {
+      "source": "sdk/provider/build-tool/toolchain.json",
+      "destination": "sdk/provider/build-tool/toolchain.json"
+    },
+    {
+      "source": "sdk/provider/package-lock.json",
+      "destination": "sdk/provider/package-lock.json"
+    },
+    {
+      "source": "sdk/provider/package.json",
+      "destination": "sdk/provider/package.json"
+    },
+    {
+      "source": "sdk/provider/src/broker.d.ts",
+      "destination": "sdk/provider/src/broker.d.ts"
+    },
+    {
+      "source": "sdk/provider/src/contracts.ts",
+      "destination": "sdk/provider/src/contracts.ts"
+    },
+    {
+      "source": "sdk/provider/src/index.ts",
+      "destination": "sdk/provider/src/index.ts"
+    },
+    {
+      "source": "sdk/provider/test/authoring.test.mjs",
+      "destination": "sdk/provider/test/authoring.test.mjs"
+    },
+    {
+      "source": "sdk/provider/test/browser.test.mjs",
+      "destination": "sdk/provider/test/browser.test.mjs"
+    },
+    {
+      "source": "sdk/provider/test/diagnostics.test.mjs",
+      "destination": "sdk/provider/test/diagnostics.test.mjs"
+    },
+    {
+      "source": "sdk/provider/test/fixtures.test.mjs",
+      "destination": "sdk/provider/test/fixtures.test.mjs"
+    },
+    {
+      "source": "sdk/provider/test/process.test.mjs",
+      "destination": "sdk/provider/test/process.test.mjs"
+    },
+    {
+      "source": "sdk/provider/test/reproducibility.test.mjs",
+      "destination": "sdk/provider/test/reproducibility.test.mjs"
+    },
+    {
+      "source": "sdk/provider/tsconfig.json",
+      "destination": "sdk/provider/tsconfig.json"
+    },
+    {
+      "source": "sdk/provider/wit/provider.wit",
+      "destination": "sdk/provider/wit/provider.wit"
+    }
+  ]
+}

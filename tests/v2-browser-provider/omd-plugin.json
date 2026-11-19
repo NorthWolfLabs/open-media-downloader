@@ -1,0 +1,1 @@
+{"api":"omd:provider@2.0.0","id":"fixture.browser","name":"Browser fixture","version":"1.0.0","description":"Deterministic browser conformance fixture","source_hosts":["fixture.example"],"capabilities":["search"],"grants":[{"id":"source","hosts":["fixture.example"],"methods":["GET"],"credential":false}],"media_tools":false,"browser":true}

@@ -1,0 +1,10 @@
+{
+  "release":{"reference":{"provider":"fixture","id":"chapter:110.5-special"},"collection":{"provider":"fixture","id":"series"},"title":"Chapter 110.5 — Special","canonical_url":"https://example.com/series/chapter-110-5","chapter":"110.5-special","volume":null,"language":"en","group":"Example","published_at":null,"revision":"1","availability":"available","unavailable_reason":null,"position":0},
+  "collection":{"reference":{"provider":"fixture","id":"series"},"title":"Fixture series","kind":"manga","canonical_url":"https://example.com/series","description":null,"artwork_url":null},
+  "recipe":"cbz","policy":{"languages":["en"]},
+  "outputs":[
+    {"id":"page-a","position":0,"relative_path":"00001.png","role":"page","media_type":"image/png","expected_size":null,"expected_sha256":null,"locator":{"kind":"http","url":"https://example.com/a.png","permission":"images","headers":{},"credential_profile":null}},
+    {"id":"page-b","position":1,"relative_path":"00002.png","role":"page","media_type":"image/png","expected_size":null,"expected_sha256":null,"locator":{"kind":"http","url":"https://example.com/b.png","permission":"images","headers":{},"credential_profile":null}}
+  ],
+  "final_relative_path":"Fixture/Chapter 110.5","expires_at":null,"provider_digest":"fixture"
+}

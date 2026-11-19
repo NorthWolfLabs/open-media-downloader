@@ -1,0 +1,398 @@
+{
+  "lookupAcquisitions": {
+    "kind": "tool",
+    "name": "lookup_acquisitions"
+  },
+  "prepareBatch": {
+    "kind": "tool",
+    "name": "prepare_batch"
+  },
+  "listBatchItems": {
+    "kind": "tool",
+    "name": "list_batch_items"
+  },
+  "listBrowserTools": {
+    "kind": "tool",
+    "name": "list_browser_tools"
+  },
+  "installBrowserTools": {
+    "kind": "tool",
+    "name": "install_browser_tools"
+  },
+  "getBrowserToolStatus": {
+    "kind": "tool",
+    "name": "get_browser_tool_status"
+  },
+  "getBrowserTool": {
+    "kind": "tool",
+    "name": "get_browser_tool"
+  },
+  "activateBrowserTools": {
+    "kind": "tool",
+    "name": "activate_browser_tools"
+  },
+  "retryBrowserToolCleanup": {
+    "kind": "tool",
+    "name": "retry_browser_tool_cleanup"
+  },
+  "removeBrowserTools": {
+    "kind": "tool",
+    "name": "remove_browser_tools"
+  },
+  "attachClient": {
+    "kind": "internal",
+    "reason": "connection-owned lease"
+  },
+  "detachClient": {
+    "kind": "internal",
+    "reason": "connection-owned lease"
+  },
+  "heartbeatClient": {
+    "kind": "internal",
+    "reason": "connection-owned lease"
+  },
+  "listDestinationChecks": {
+    "kind": "tool",
+    "name": "list_destination_checks"
+  },
+  "getDestinationCheck": {
+    "kind": "tool",
+    "name": "get_destination_check"
+  },
+  "listDestinationCheckFiles": {
+    "kind": "tool",
+    "name": "list_destination_check_files"
+  },
+  "controlDestinationCheck": {
+    "kind": "tool",
+    "name": "control_destination_check"
+  },
+  "listDestinations": {
+    "kind": "tool",
+    "name": "list_destinations"
+  },
+  "addDestination": {
+    "kind": "tool",
+    "name": "add_destination"
+  },
+  "ensureDefaultDestination": {
+    "kind": "tool",
+    "name": "ensure_default_destination"
+  },
+  "getDestination": {
+    "kind": "tool",
+    "name": "get_destination"
+  },
+  "checkDestination": {
+    "kind": "tool",
+    "name": "check_destination"
+  },
+  "reconnectDestination": {
+    "kind": "tool",
+    "name": "reconnect_destination"
+  },
+  "relocateDestination": {
+    "kind": "tool",
+    "name": "relocate_destination"
+  },
+  "followEvents": {
+    "kind": "tool",
+    "name": "follow_events"
+  },
+  "listFileOperations": {
+    "kind": "tool",
+    "name": "list_file_operations"
+  },
+  "getFileOperation": {
+    "kind": "tool",
+    "name": "get_file_operation"
+  },
+  "listFileOperationEntries": {
+    "kind": "tool",
+    "name": "list_file_operation_entries"
+  },
+  "controlFileOperation": {
+    "kind": "tool",
+    "name": "control_file_operation"
+  },
+  "listGroups": {
+    "kind": "tool",
+    "name": "list_groups"
+  },
+  "getGroup": {
+    "kind": "tool",
+    "name": "get_group"
+  },
+  "listGroupJobs": {
+    "kind": "tool",
+    "name": "list_group_jobs"
+  },
+  "controlGroup": {
+    "kind": "tool",
+    "name": "control_group"
+  },
+  "listInbox": {
+    "kind": "tool",
+    "name": "list_inbox"
+  },
+  "controlInboxItem": {
+    "kind": "tool",
+    "name": "control_inbox_item"
+  },
+  "listJobs": {
+    "kind": "tool",
+    "name": "list_jobs"
+  },
+  "enqueueAcquisition": {
+    "kind": "tool",
+    "name": "submit_preparation"
+  },
+  "getJob": {
+    "kind": "tool",
+    "name": "inspect_job"
+  },
+  "createFileOperation": {
+    "kind": "tool",
+    "name": "create_file_operation"
+  },
+  "listArtifacts": {
+    "kind": "tool",
+    "name": "list_artifacts"
+  },
+  "getArtifact": {
+    "kind": "tool",
+    "name": "get_artifact"
+  },
+  "controlJob": {
+    "kind": "tool",
+    "name": "job_action"
+  },
+  "setMetadataOverride": {
+    "kind": "tool",
+    "name": "set_metadata_override"
+  },
+  "getMetadataOverride": {
+    "kind": "tool",
+    "name": "get_metadata_override"
+  },
+  "getNamingTemplates": {
+    "kind": "tool",
+    "name": "get_naming_templates"
+  },
+  "setNamingTemplates": {
+    "kind": "tool",
+    "name": "set_naming_templates"
+  },
+  "getNotificationStatus": {
+    "kind": "tool",
+    "name": "get_notification_status"
+  },
+  "configureNotifications": {
+    "kind": "tool",
+    "name": "configure_notifications"
+  },
+  "listNotificationHistory": {
+    "kind": "tool",
+    "name": "list_notification_history"
+  },
+  "controlNotification": {
+    "kind": "tool",
+    "name": "control_notification"
+  },
+  "testNotification": {
+    "kind": "tool",
+    "name": "test_notification"
+  },
+  "getContract": {
+    "kind": "resource",
+    "reason": "omd://reference/openapi resource"
+  },
+  "listOperations": {
+    "kind": "tool",
+    "name": "list_operations"
+  },
+  "prepareAcquisition": {
+    "kind": "tool",
+    "name": "prepare_releases"
+  },
+  "listRelocations": {
+    "kind": "tool",
+    "name": "list_relocations"
+  },
+  "getRelocation": {
+    "kind": "tool",
+    "name": "get_relocation"
+  },
+  "listRelocationFiles": {
+    "kind": "tool",
+    "name": "list_relocation_files"
+  },
+  "controlRelocation": {
+    "kind": "tool",
+    "name": "control_relocation"
+  },
+  "listSelections": {
+    "kind": "tool",
+    "name": "list_selections"
+  },
+  "getSelection": {
+    "kind": "tool",
+    "name": "get_selection"
+  },
+  "controlSelection": {
+    "kind": "tool",
+    "name": "control_selection"
+  },
+  "getService": {
+    "kind": "tool",
+    "name": "service_status"
+  },
+  "shutdownService": {
+    "kind": "tool",
+    "name": "shutdown_service"
+  },
+  "getSettings": {
+    "kind": "tool",
+    "name": "get_settings"
+  },
+  "updateSettings": {
+    "kind": "tool",
+    "name": "update_settings"
+  },
+  "interactWithSignIn": {
+    "kind": "tool",
+    "name": "interact_with_sign_in"
+  },
+  "closeSourceSignIn": {
+    "kind": "tool",
+    "name": "close_source_sign_in"
+  },
+  "completeSourceSignIn": {
+    "kind": "tool",
+    "name": "complete_source_sign_in"
+  },
+  "sourceSignInStatus": {
+    "kind": "tool",
+    "name": "source_sign_in_status"
+  },
+  "createSnapshot": {
+    "kind": "tool",
+    "name": "create_snapshot"
+  },
+  "listSnapshotReleases": {
+    "kind": "tool",
+    "name": "list_snapshot_releases"
+  },
+  "listSourceCatalog": {
+    "kind": "tool",
+    "name": "list_source_catalog"
+  },
+  "listSourceRemovals": {
+    "kind": "tool",
+    "name": "list_source_removals"
+  },
+  "getSourceRemoval": {
+    "kind": "tool",
+    "name": "get_source_removal"
+  },
+  "listSourceRemovalEntries": {
+    "kind": "tool",
+    "name": "list_source_removal_entries"
+  },
+  "retrySourceRemoval": {
+    "kind": "tool",
+    "name": "retry_source_removal"
+  },
+  "listSources": {
+    "kind": "tool",
+    "name": "list_sources"
+  },
+  "installSource": {
+    "kind": "tool",
+    "name": "install_source"
+  },
+  "activateSource": {
+    "kind": "tool",
+    "name": "activate_source"
+  },
+  "getArtwork": {
+    "kind": "tool",
+    "name": "get_artwork"
+  },
+  "listSourceAccounts": {
+    "kind": "tool",
+    "name": "list_source_accounts"
+  },
+  "revokeSourceAccount": {
+    "kind": "tool",
+    "name": "revoke_source_account"
+  },
+  "saveSourceAccount": {
+    "kind": "tool",
+    "name": "save_source_account"
+  },
+  "invokeSource": {
+    "kind": "tool",
+    "name": "source_query"
+  },
+  "removeSource": {
+    "kind": "tool",
+    "name": "remove_source"
+  },
+  "startSourceSignIn": {
+    "kind": "tool",
+    "name": "start_source_sign_in"
+  },
+  "listSourceVersions": {
+    "kind": "tool",
+    "name": "list_source_versions"
+  },
+  "listSubscriptions": {
+    "kind": "tool",
+    "name": "list_subscriptions"
+  },
+  "createSubscription": {
+    "kind": "tool",
+    "name": "create_subscription"
+  },
+  "updateSubscription": {
+    "kind": "tool",
+    "name": "update_subscription"
+  },
+  "controlSubscription": {
+    "kind": "tool",
+    "name": "control_subscription"
+  },
+  "getSummary": {
+    "kind": "tool",
+    "name": "get_summary"
+  },
+  "listToolSets": {
+    "kind": "tool",
+    "name": "list_tool_sets"
+  },
+  "installToolSet": {
+    "kind": "tool",
+    "name": "install_tool_set"
+  },
+  "getToolStatus": {
+    "kind": "tool",
+    "name": "get_tool_status"
+  },
+  "getToolSet": {
+    "kind": "tool",
+    "name": "get_tool_set"
+  },
+  "activateToolSet": {
+    "kind": "tool",
+    "name": "activate_tool_set"
+  },
+  "removeToolSet": {
+    "kind": "tool",
+    "name": "remove_tool_set"
+  },
+  "retryToolCleanup": {
+    "kind": "tool",
+    "name": "retry_tool_cleanup"
+  }
+}

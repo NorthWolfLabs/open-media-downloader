@@ -1,0 +1,31 @@
+[package]
+name = "omd-browser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+fixture-tests = ["omd-network/fixture-tests"]
+
+[dependencies]
+omd-domain = { path = "../omd-domain" }
+omd-store = { path = "../omd-store" }
+sqlx.workspace = true
+omd-files = { path = "../omd-files" }
+omd-media = { path = "../omd-media" }
+omd-network = { path = "../omd-network" }
+omd-helper-broker = { path = "../omd-helper-broker" }
+omd-isolation = { path = "../omd-isolation" }
+omd-credentials = { path = "../omd-credentials" }
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+url.workspace = true
+tempfile.workspace = true
+chrono.workspace = true
+zeroize = "1"
+
+[dev-dependencies]
+http = "1"

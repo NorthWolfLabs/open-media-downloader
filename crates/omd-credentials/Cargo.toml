@@ -1,0 +1,28 @@
+[package]
+name = "omd-credentials"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+schemars.workspace = true
+omd-domain = { path = "../omd-domain" }
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+url.workspace = true
+reqwest.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+zeroize = { version = "1", features = ["derive"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "=3.6.3", features = ["apple-native"] }
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "=3.6.3", features = ["windows-native"] }
+[target.'cfg(target_os = "linux")'.dependencies]
+secret-service = { version = "=4.0.0", features = ["rt-async-io-crypto-rust"] }
+zbus = { version = "4", default-features = false, features = ["async-io"] }
+
+[dev-dependencies]
+uuid.workspace = true

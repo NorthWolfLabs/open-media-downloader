@@ -1,0 +1,28 @@
+[package]
+name = "omd-acquisition"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+omd-media = { path = "../omd-media" }
+omd-credentials = { path = "../omd-credentials" }
+omd-domain = { path = "../omd-domain" }
+omd-store = { path = "../omd-store" }
+omd-files = { path = "../omd-files" }
+omd-network = { path = "../omd-network" }
+tokio.workspace = true
+tokio-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+thiserror.workspace = true
+zip.workspace = true
+
+[dev-dependencies]
+omd-network = { path = "../omd-network", features = ["fixture-tests"] }
+reqwest.workspace = true
+futures-util.workspace = true
+http = "1"
+tempfile.workspace = true

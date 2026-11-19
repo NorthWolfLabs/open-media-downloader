@@ -1,0 +1,28 @@
+[package]
+name = "omd-helper-broker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+omd-network = { path = "../omd-network" }
+omd-domain = { path = "../omd-domain" }
+omd-credentials = { path = "../omd-credentials" }
+tokio.workspace = true
+tokio-util.workspace = true
+thiserror.workspace = true
+url.workspace = true
+futures-util.workspace = true
+base64.workspace = true
+sha2.workspace = true
+rcgen = "0.14"
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+bytes = "1"
+
+[dev-dependencies]
+reqwest.workspace = true
+omd-network = { path = "../omd-network", features = ["fixture-tests"] }
+http = "1"

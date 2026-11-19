@@ -1,0 +1,22 @@
+CREATE TABLE destinations(id TEXT PRIMARY KEY, label TEXT NOT NULL, root TEXT NOT NULL UNIQUE);
+CREATE TABLE providers(id TEXT PRIMARY KEY, active_digest TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE provider_versions(provider_id TEXT NOT NULL, digest TEXT NOT NULL, manifest_json TEXT NOT NULL, component_path TEXT NOT NULL, approved INTEGER NOT NULL DEFAULT 0, installed_at TEXT NOT NULL, PRIMARY KEY(provider_id,digest));
+CREATE TABLE collections(key TEXT PRIMARY KEY, provider_id TEXT NOT NULL, source_id TEXT NOT NULL, data_json TEXT NOT NULL, overrides_json TEXT NOT NULL DEFAULT '{}', UNIQUE(provider_id,source_id));
+CREATE TABLE releases(key TEXT PRIMARY KEY, provider_id TEXT NOT NULL, source_id TEXT NOT NULL, data_json TEXT NOT NULL, UNIQUE(provider_id,source_id));
+CREATE TABLE collection_releases(collection_key TEXT NOT NULL REFERENCES collections(key),release_key TEXT NOT NULL REFERENCES releases(key), position INTEGER NOT NULL, PRIMARY KEY(collection_key,release_key));
+CREATE TABLE prepared(id TEXT PRIMARY KEY, request_digest TEXT NOT NULL, data_json TEXT NOT NULL, expires_at TEXT NOT NULL);
+CREATE TABLE jobs(id TEXT PRIMARY KEY, group_id TEXT, acquisition_key TEXT NOT NULL UNIQUE, title TEXT NOT NULL, destination_id TEXT NOT NULL REFERENCES destinations(id), state TEXT NOT NULL, plan_json TEXT NOT NULL, bytes_done INTEGER NOT NULL DEFAULT 0, bytes_total INTEGER, attempt INTEGER NOT NULL DEFAULT 0, issue_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE INDEX jobs_queue ON jobs(state,created_at,id);
+CREATE TABLE idempotency(key TEXT PRIMARY KEY,request_digest TEXT NOT NULL,resource_id TEXT NOT NULL REFERENCES jobs(id));
+CREATE TABLE checkpoints(job_id TEXT NOT NULL REFERENCES jobs(id),output_id TEXT NOT NULL,fingerprint TEXT NOT NULL,data_json TEXT NOT NULL,PRIMARY KEY(job_id,output_id));
+CREATE TABLE publications(job_id TEXT PRIMARY KEY REFERENCES jobs(id),manifest_json TEXT NOT NULL,state TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE TABLE artifacts(id TEXT PRIMARY KEY,job_id TEXT NOT NULL REFERENCES jobs(id),relative_path TEXT NOT NULL,size INTEGER NOT NULL,sha256 TEXT NOT NULL,media_type TEXT NOT NULL,status TEXT NOT NULL,UNIQUE(job_id,relative_path));
+CREATE TABLE subscriptions(id TEXT PRIMARY KEY,data_json TEXT NOT NULL,enabled INTEGER NOT NULL,initialized INTEGER NOT NULL DEFAULT 0,next_check TEXT NOT NULL,last_success TEXT,issue_json TEXT);
+CREATE TABLE observations(subscription_id TEXT NOT NULL REFERENCES subscriptions(id),release_key TEXT NOT NULL,revision TEXT NOT NULL,data_json TEXT NOT NULL,PRIMARY KEY(subscription_id,release_key,revision));
+CREATE TABLE actions(id TEXT PRIMARY KEY,subscription_id TEXT NOT NULL REFERENCES subscriptions(id),release_json TEXT NOT NULL,state TEXT NOT NULL,resource_id TEXT,issue_json TEXT,created_at TEXT NOT NULL,read_at TEXT);
+CREATE INDEX pending_actions ON actions(state,created_at);
+CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,resource_id TEXT NOT NULL,created_at TEXT NOT NULL);
+CREATE TABLE settings(key TEXT PRIMARY KEY,value_json TEXT NOT NULL);
+CREATE TABLE credentials(id TEXT PRIMARY KEY,provider_id TEXT NOT NULL,metadata_json TEXT NOT NULL);
+CREATE TABLE relocations(id TEXT PRIMARY KEY,destination_id TEXT NOT NULL REFERENCES destinations(id),data_json TEXT NOT NULL,state TEXT NOT NULL);
+
