@@ -47,11 +47,11 @@ try:
         run("package",command+[str(project/"launcher.py")])
     executable=output/"bin"/("omd-yt-dlp.exe" if os.name=="nt" else "omd-yt-dlp")
     run("version",[str(executable),"--ignore-config","--no-plugin-dirs","--version"])
-    if (output/"version.log").read_text().strip()!="2026.08.19":raise RuntimeError("Unexpected extractor version")
+    if (output/"version.log").read_text().strip()!="2026.10.26":raise RuntimeError("Unexpected extractor version")
     if args.identity:
         run("signature",["/usr/bin/codesign","--verify","--strict",str(executable)])
         run("entitlements",["/usr/bin/codesign","-d","--entitlements","-",str(executable)])
         if "disable-library-validation" in (output/"entitlements.log").read_text():raise RuntimeError("Library validation must remain enabled")
-    record["executable"]={"path":str(executable),"sha256":hashlib.sha256(executable.read_bytes()).hexdigest(),"bytes":executable.stat().st_size,"version":"2026.08.19"};record["status"]="passed";save();print(json.dumps(record["executable"],indent=2))
+    record["executable"]={"path":str(executable),"sha256":hashlib.sha256(executable.read_bytes()).hexdigest(),"bytes":executable.stat().st_size,"version":"2026.10.26"};record["status"]="passed";save();print(json.dumps(record["executable"],indent=2))
 except BaseException as error:
     record["status"]="failed";record["failure"]=str(error);save();raise

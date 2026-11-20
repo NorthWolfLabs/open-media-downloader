@@ -709,6 +709,12 @@ def apple_checks(run, app, team, label, roles=None, bundle_id=None, stapled=True
             need(sha(data) == before['files'][path]['sha256'], f'{label}: {path} changed during verification')
             final.check_signature(path, roles[path], data, 'developer-id', team, final.expected_identifier(roles[path], path, bundle_id))
         result['code_objects'] = len(roles)
+        # A nested application bundle (the sign-in window) is also verified as a bundle: its
+        # seal and Info.plist binding, not only its main executable.
+        bundles = sorted({signing.bundle_root(r, p) for p, r in roles.items() if r['filetype'] == 'app-bundle'})
+        for root in bundles:
+            run.passes('codesign', [CODESIGN, '--verify', '--strict', '--all-architectures', f'--test-requirement=={requirement}', app / root], f'{label}: codesign {root}')
+        result['nested_bundles'] = len(bundles)
     display = display_identity(run.passes('codesign', [CODESIGN, '-d', '-vvvv', '--arch', 'arm64', app], f'{label}: outer CodeDirectory'))
     executable = signing.strict_plist(app / final.INFO)['CFBundleExecutable']
     outer = outer_identity((app / 'Contents/MacOS' / executable).read_bytes())
@@ -976,8 +982,9 @@ def final_expectations(input_app, binding):
     res, version = binding['layout']['resources'], binding['version']
     tools = final.strict((input_app / res / 'tools/tools-v2.json').read_bytes(), 'tools-v2.json')
     browser = final.strict((input_app / res / 'browser/browser-tools-v2.json').read_bytes(), 'browser-tools-v2.json')
-    engine = sorted(p[len(res) + 5:] for p in binding['layout']['code'] if p.startswith(res + '/bin/'))
-    required = {n: {'version': version, 'prefix': 'bin/' + n} for n in engine}
+    # The binding's own recorded layout: an earlier one installed a bare bin/omd-signin.
+    engine = final.engine_binaries(binding['layout']['code'], res)
+    required = {n: {'version': version, 'prefix': p[len(res) + 1:]} for n, p in engine.items()}
     for name in ('yt_dlp', 'ffmpeg', 'ffprobe', 'node'):
         required[name] = {'version': tools[name]['version'], 'prefix': 'tools/' + name + '/'}
     required['browser'] = {'version': browser['version'], 'prefix': 'browser/content/'}
@@ -1094,7 +1101,7 @@ def _derive(spec, run):
     # 6. Actual Apple checks on the private snapshots.
     policy, policy_identity = signing.load_policy()
     res, exe, bundle_id, team = binding['layout']['resources'], binding['layout']['executable'], binding['layout']['bundle_id'], expected['team_id']
-    roles_all = {signing.expand(r['path'], res, exe): r for r in policy['roles']}
+    roles_all = signing.role_paths(policy, res, exe)
     need(set(roles_all) == set(binding['layout']['code']), 'The current signing policy differs from the signed binding layout')
     signed_checks = apple_checks(run, snapshots['signed'], team, 'signed app', roles_all, bundle_id, stapled=False)
     stapled_checks = apple_checks(run, snapshots['stapled'], team, 'stapled app', roles_all, bundle_id, stapled=True)

@@ -462,8 +462,16 @@ async fn main() -> anyhow::Result<()> {
         instance,
     };
     use reqwest::Method as M;
+    // A command can submit downloads and leave; ask the engine to finish them
+    // before it stops. Earlier engines ignore the option.
     let lease = client
-        .call(M::POST, "/v2/clients", None, false, None)
+        .call(
+            M::POST,
+            "/v2/clients?finish_downloads=true",
+            None,
+            false,
+            None,
+        )
         .await?;
     let id = lease["id"].as_str().unwrap().to_owned();
     // Independent heartbeats keep long preparations attached without engine internals.

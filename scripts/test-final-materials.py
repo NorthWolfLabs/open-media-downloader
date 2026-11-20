@@ -12,12 +12,14 @@ generated kit, receipt and evidence that pass the real recipient verifier) and s
 only new temporary copies with the canned Developer ID runners of the signing and
 preparation tests (ad-hoc substitutes, canned Team checks): they exercise binding
 mechanics, never signature evidence. Uncanned controls show genuine codesign refusing
-the ad-hoc substitutes. Opt-in, read-only real data:
-OMD_FINAL_MATERIALS_REHEARSAL (+ OMD_FINAL_MATERIALS_LOCKS) reads the genuine Developer
-ID private-validation pair; OMD_FINAL_MATERIALS_SOURCE_ADAPTER and
-OMD_FINAL_MATERIALS_SOURCE_KIT run the v2 controlled-source proof on the real producer,
-its labelled ad-hoc changed-signature control and the reviewed evidence, kit and
-bootloader. Nothing is modified and no identity is used.
+the ad-hoc substitutes. Opt-in, read-only real data, each described by a JSON file
+written next to that evidence (paths and the expected facts, so a release round can
+regenerate it without editing this suite):
+OMD_FINAL_MATERIALS_GENUINE_PAIR names the bind-final-materials.py prepare options of a
+genuine Developer ID signed pair and its expected binding facts;
+OMD_FINAL_MATERIALS_SOURCE_PROOF names the real controlled-source producer, its labelled
+ad-hoc changed-signature control and the reviewed evidence, kit and bootloader for the v2
+controlled-source proof. Nothing is modified and no identity is used.
 """
 import contextlib
 import copy
@@ -38,12 +40,12 @@ from unittest import mock
 import final_materials as fm
 import macos_extractor as ex
 import macos_signing as signing
+import signin_bundle
 
 SCRIPTS = Path(__file__).resolve().parent
 NATIVE = platform.system() == 'Darwin' and shutil.which('xcrun') is not None and Path('/usr/bin/codesign').exists()
-REHEARSAL = os.environ.get('OMD_FINAL_MATERIALS_REHEARSAL')
-SOURCE_ADAPTER = os.environ.get('OMD_FINAL_MATERIALS_SOURCE_ADAPTER')
-SOURCE_KIT = os.environ.get('OMD_FINAL_MATERIALS_SOURCE_KIT')
+GENUINE_PAIR = os.environ.get('OMD_FINAL_MATERIALS_GENUINE_PAIR')
+SOURCE_PROOF = os.environ.get('OMD_FINAL_MATERIALS_SOURCE_PROOF')
 
 
 def load(name, filename):
@@ -63,7 +65,7 @@ SHELL = 'Contents/MacOS/' + EXE
 EXTRACTOR = RES + '/tools/yt_dlp/yt-dlp_macos'
 KIT = 'kits/source-kit.tar.gz'
 V1, V2 = fm.FINAL_SCHEMA, fm.FINAL_SCHEMA_V2
-FIXTURE_DIGESTS = {V1: '6c07008986773c2583d6ee2466db2acc86cd07953b9fbf249d517669f2f516ca', V2: 'fa191ccd7529e2b4386c5433611ff2c3959776335ffafbb1de81c0206c6ed08e'}
+FIXTURE_DIGESTS = {V1: 'e14f2ad5155bf1fe6e3b7a4c9f6e45eebf5cf2924d1967c1eee87fe19a1a0da7', V2: '07df65c1fd87609306f2af1e86be0a2886007e6af574a4b91f2584ab96f3b923'}
 digest = sign_tests.digest
 REAL_CHECK = fm.check_signature
 REAL_OUTER = ex.verify_outer
@@ -145,6 +147,42 @@ def apply_edits(fixtures, edits):
     return s
 
 
+def legacy_sign_in(fixtures):
+    """Historical evidence: a binding made before the macOS sign-in window became an app bundle
+    records it as a bare bin/omd-signin. Derived from the shared nested-bundle case as the
+    desktop test derives it, so the shared fixture files stay byte-identical in both projects."""
+    s = apply_edits(fixtures, next(c for c in fixtures['cases'] if c['name'] == 'nested-sign-in-bundle')['edits'])
+    doc = s['doc']
+    res = doc['layout']['resources']
+    bundle, helper = 'bin/OMD Sign-In.app/', 'bin/OMD Sign-In.app/Contents/MacOS/omd-signin'
+
+    def flatten(table, prefix=''):
+        for key in [k for k in table if k.startswith(prefix + bundle)]:
+            if key == prefix + helper:
+                table[prefix + 'bin/omd-signin'] = table[key]
+            del table[key]
+    for table in [doc['input']['files'], doc['payload']['files'], s['payload'], doc['relations'], doc['layout']['code'], *(c['artifacts'] for c in doc['components'])]:
+        flatten(table, res + '/')
+    initial = json.loads(s['initial'])
+    for c in initial['components']:
+        flatten(c['artifacts'])
+    s['initial'] = json.dumps(initial, indent=2) + '\n'
+    data = s['initial'].encode()
+    review, v1 = {'bytes': len(data), 'sha256': digest(data)}, res + '/third-party/materials-v1.json'
+    for table in (doc['input']['files'], doc['payload']['files'], s['payload']):
+        table[v1] = dict(review)
+    doc['relations'][v1].update(before=review['sha256'], after=review['sha256'])
+    for c in doc['components']:
+        if v1 in c['artifacts']:
+            c['artifacts'][v1] = {'initial': review['sha256'], 'final': review['sha256']}
+    doc['initial_review'].update(review)
+    doc['relations'][fm.SEAL]['sealed_files'] = len(doc['payload']['files']) - 3
+    for name in ('input', 'payload'):
+        doc[name]['inventory_sha256'] = fm.canonical_inventory(doc[name]['files'])
+    assert res + '/bin/omd-signin' in doc['layout']['code'] and 'Sign-In.app' not in json.dumps(s)
+    return s
+
+
 class SharedContract(unittest.TestCase):
     """The same fixture cases and messages as desktop scripts/final-materials-contract.test.mjs."""
 
@@ -181,6 +219,27 @@ class SharedContract(unittest.TestCase):
                     with self.assertRaises(ValueError) as caught:
                         run()
                     self.assertIn(case['error'], str(caught.exception))
+
+    def test_historical_bindings_validate_from_their_recorded_layout(self):
+        # The validator finds each engine binary where the binding recorded it, never at the
+        # current layout's path (that lookup used to fail with a KeyError on a bare helper).
+        for schema, name in ((V1, 'final-materials-fixtures-v1.json'), (V2, 'final-materials-fixtures-v2.json')):
+            fixtures = json.loads((SCRIPTS.parent / 'distribution' / name).read_text())
+            run = lambda s: fm.validate_final(s['doc'], s['initial'].encode(), s['payload'], s['delivery'], s['expect'])
+            with self.subTest(name):
+                self.assertEqual(run(legacy_sign_in(fixtures)), {'schema': schema, 'coverage_validated': True, 'distribution_candidate': True, 'release_accepted': False})
+            with self.subTest(name, refused='unsigned helper in the receipt'):
+                s = legacy_sign_in(fixtures)
+                res = s['doc']['layout']['resources']
+                s['doc']['receipts']['engine']['artifacts']['omd-signin'] = s['doc']['input']['files'][res + '/bin/omd-signin']['sha256']
+                with self.assertRaisesRegex(ValueError, 'Engine receipt does not bind the final payload'):
+                    run(s)
+            with self.subTest(name, refused='bare and bundled helper'):
+                s = legacy_sign_in(fixtures)
+                res = s['doc']['layout']['resources']
+                s['doc']['layout']['code'][res + '/bin/OMD Sign-In.app/Contents/MacOS/omd-signin'] = 'sign-in-window'
+                with self.assertRaisesRegex(ValueError, 'Invalid final payload layout'):
+                    run(s)
 
     def test_v1_contract_and_fixtures_are_unchanged(self):
         fixtures = (SCRIPTS.parent / 'distribution/materials-contract-fixtures-v1.json').read_bytes()
@@ -234,7 +293,9 @@ def v1_manifest(app, locks, version='1.0.0'):
     tool = {'notices': pick('LICENSE'), 'source': pick('LICENSE'), 'instructions': pick('LICENSE'), 'provenance': pick('tools/tools-v2.json')}
     browser = {p: h for p, h in files.items() if p.startswith('browser/content/')}
     component = lambda cid, ver, artifacts, materials: {'id': cid, 'version': ver, 'status': 'reviewed', 'pending': [], 'artifacts': artifacts, 'materials': copy.deepcopy(materials)}
-    components = [component(n, version, pick('bin/' + n), engine) for n in ENGINE]
+    # The macOS sign-in window component owns its whole app bundle (executable, Info.plist, icon).
+    artifacts = lambda n: {p: h for p, h in files.items() if p.startswith(sign_tests.SIGNIN + '/')} if n == 'omd-signin' else pick('bin/' + n)
+    components = [component(n, version, artifacts(n), engine) for n in ENGINE]
     tools = json.loads((root / 'tools/tools-v2.json').read_text())
     components += [component(n, tools[n]['version'], {p: h for p, h in files.items() if p.startswith(f'tools/{n}/')}, tool) for n in ('yt_dlp', 'ffmpeg', 'ffprobe', 'node')]
     components.append(component('browser', 'fixture-browser', browser, {'notices': pick('browser/content/browser/ABOUT'), 'source': pick('browser/content/adapter/adapter.mjs'),
@@ -341,7 +402,9 @@ class BindingFixtures:
                                             'instructions': ['delivery:notes/route.md'], 'provenance': ['delivery:receipts/receipt.json']}),
             final('frontend', [SHELL], {'notices': ['delivery:notes/frontend-NOTICES.txt'], 'source': ['delivery:sources/first-party.tar.gz'],
                                         'instructions': ['delivery:notes/route.md'], 'provenance': ['delivery:notes/frontend-receipt.json']}),
+            # Signing outputs: the outer seal and the new seal of the nested sign-in bundle.
             final('desktop-bundle', ['Contents/Info.plist', 'Contents/Resources/icon.icns', 'Contents/_CodeSignature/CodeResources', RES + '/build-inventory.json',
+                                     RES + '/' + sign_tests.SIGNIN + '/' + signin_bundle.SEAL,
                                      *([RES + '/third-party/materials-v1.json'] if v1.exists() else [])],
                   {'notices': ['payload:' + RES + '/LICENSE'], 'source': ['delivery:sources/first-party.tar.gz'], 'instructions': ['delivery:notes/route.md'],
                    'provenance': ['payload:' + RES + '/build-inventory.json']})]
@@ -407,8 +470,14 @@ class TwoPhaseBinding(BindingFixtures, unittest.TestCase):
         self.assertEqual((doc['coverage_validated'], doc['distribution_candidate'], doc['reviewed'], doc['release_accepted']), (True, True, True, False))
         self.assertEqual(result['distribution_validation'], {'pass': True})
         counts = result['relations']
-        self.assertEqual((counts['signature-only'], counts['prepared-extractor'], counts['managed-manifest'], counts['build-inventory'], counts['engine-receipt'], counts['outer-seal']),
-                         (14, 1, 2, 1, 1, 1))
+        # 14 nested code objects (the sign-in window's main executable among them) and the shell.
+        self.assertEqual((counts['signature-only'], counts['prepared-extractor'], counts['managed-manifest'], counts['build-inventory'], counts['engine-receipt'], counts['outer-seal'], counts['nested-seal']),
+                         (15, 1, 2, 1, 1, 1, 1))
+        helper = RES + '/' + sign_tests.SIGNIN
+        self.assertEqual(doc['layout']['code'][helper + '/' + signin_bundle.EXECUTABLE], 'sign-in-window')
+        self.assertEqual(doc['relations'][helper + '/' + signin_bundle.SEAL]['kind'], 'nested-seal')
+        self.assertEqual({doc['relations'][helper + '/' + m]['kind'] for m in (signin_bundle.INFO, signin_bundle.ICON)}, {'identical'})
+        self.assertEqual(doc['receipts']['engine']['artifacts']['omd-signin'], doc['payload']['files'][helper + '/' + signin_bundle.EXECUTABLE]['sha256'])
         self.assertEqual(doc['payload']['inventory_sha256'], fm.canonical_inventory(signing.inventory_of(run['final'])))
         self.assertEqual(result['extractor']['signature_only_natives'], 2)
         self.assertNotIn(str(self.root), json.dumps(doc))
@@ -737,7 +806,7 @@ class SourceRouteBinding(BindingFixtures, unittest.TestCase):
         self.assertEqual((relation['route'], relation['method'], relation['before'], relation['prepared'], relation['signature_only_natives'], relation['identical_non_natives']),
                          ('controlled-source', fm.SOURCE_EXTRACTOR_METHOD, digest(producer), digest(prepared), 2, 7))
         self.assertEqual(report['relations'], {'build-inventory': 1, 'engine-receipt': 1, 'identical': report['relations']['identical'], 'managed-manifest': 2,
-                                               'outer-seal': 1, 'prepared-extractor': 1, 'signature-only': 14})
+                                               'nested-seal': 1, 'outer-seal': 1, 'prepared-extractor': 1, 'signature-only': 15})
         # The kit is a bound delivery file and the extractor component's typed source material;
         # the initial review keeps the producer digest and the final digest is separate.
         self.assertEqual(doc['delivery']['files'][KIT], case.doc['kit'])
@@ -901,7 +970,7 @@ def result_expect(run, doc):
     """Expectations as the binder derives them from the pre-signature input."""
     tools = json.loads((run['app'] / RES / 'tools/tools-v2.json').read_text())
     browser = json.loads((run['app'] / RES / 'browser/browser-tools-v2.json').read_text())
-    required = {n: {'version': doc['version'], 'prefix': 'bin/' + n} for n in ENGINE}
+    required = {n: {'version': doc['version'], 'prefix': sign_tests.installed(n)} for n in ENGINE}
     required.update({n: {'version': tools[n]['version'], 'prefix': f'tools/{n}/'} for n in ('yt_dlp', 'ffmpeg', 'ffprobe', 'node')})
     required['browser'] = {'version': browser['version'], 'prefix': 'browser/content/'}
     return {'target': doc['target'], 'version': doc['version'], 'locks': doc['locks'], 'required': required,
@@ -938,118 +1007,144 @@ class SignerTwoPhaseOption(unittest.TestCase):
         self.assertEqual(sign_tests.SIGN_CLI.EXIT[signing.TWO_PHASE_STATUS], 2)
 
 
-@unittest.skipUnless(NATIVE and REHEARSAL and os.environ.get('OMD_FINAL_MATERIALS_EXTRACTOR'), 'set OMD_FINAL_MATERIALS_REHEARSAL and OMD_FINAL_MATERIALS_EXTRACTOR to explicit private validation inputs')
-class GenuinePrivatePair(unittest.TestCase):
-    """Read-only: the genuine Developer ID private-validation pair binds mechanically but
-    stays a private, pending binding; genuine signed bytes reject tampering and wrong roles."""
+def genuine(path):
+    """Opt-in real-data description: {"options" or "inputs", "expect": {...}}; duplicate keys are refused."""
+    def pairs(items):
+        keys = [key for key, _ in items]
+        if len(keys) != len(set(keys)):
+            raise ValueError(f'Duplicate key in {path}')
+        return dict(items)
+    return json.loads(Path(path).read_text(), object_pairs_hook=pairs)
+
+
+@unittest.skipUnless(NATIVE and GENUINE_PAIR, 'set OMD_FINAL_MATERIALS_GENUINE_PAIR to the genuine signed pair description JSON')
+class GenuinePair(unittest.TestCase):
+    """Read-only: a genuine Developer ID signed pair (pre-signature input app and signed app,
+    with its plan, report, prepared extractor, locks, receipts and delivery roots) binds
+    mechanically to exactly the recorded facts, and the genuine signed bytes reject tampering
+    and wrong roles. The description JSON holds the bind-final-materials.py prepare options
+    ("options") and the expected facts ("expect"); it is regenerated per release round."""
 
     @classmethod
     def setUpClass(cls):
-        root = Path(REHEARSAL)
-        cls.input = root / 'input/OMD Private Validation.app'
-        cls.final = root / 'signing/signed/OMD Private Validation.app'
-        cls.spec = {'input_app': cls.input, 'final_app': cls.final, 'plan': root / 'signing/plan-private-validation.json', 'report': root / 'signing/work/signing-report.json',
-                    'prepared_extractor': Path(os.environ['OMD_FINAL_MATERIALS_EXTRACTOR']),
-                    'locks': Path(os.environ['OMD_FINAL_MATERIALS_LOCKS']) if os.environ.get('OMD_FINAL_MATERIALS_LOCKS') else None,
-                    'delivery_roots': {'desktop-receipt': root / 'signing/work/receipts/desktop-reviewed'},
-                    'desktop_receipt': {'receipt': 'desktop-receipt/receipt.json', 'notices': 'desktop-receipt/native-NOTICES.txt'},
-                    'review': None, 'cryptographic': True, 'temp_root': None}
+        cls.description = genuine(GENUINE_PAIR)
+        cls.want = cls.description['expect']
+        argv = ['prepare']
+        for flag, value in cls.description['options'].items():
+            for item in (value if isinstance(value, list) else [value]):
+                argv += [flag, str(item)]
+        args = BIND_CLI.parser().parse_args(argv + ['--output', str(Path(tempfile.gettempdir()) / 'omd-genuine-pair-unused')])
+        cls.spec = BIND_CLI.spec(args)
+        cls.input, cls.final = Path(cls.spec['input_app']), Path(cls.spec['final_app'])
 
-    def test_genuine_pair_binds_privately(self):
+    def test_genuine_pair_binds_exactly(self):
+        want = self.want
         before = fm.canonical_inventory(signing.inventory_of(self.final))
         status, doc, report = fm.prepare(self.spec)
-        self.assertEqual(before, 'e25c44881efc487cd3a798ee5198d7b678f71bfba705a29588d6cc32bdf2dbc7')
+        self.assertEqual(before, want['inventory_sha256'])
         self.assertEqual(doc['payload']['inventory_sha256'], before)
         self.assertEqual((status, doc['purpose'], doc['coverage_validated'], doc['distribution_candidate'], doc['release_accepted']),
-                         ('final-materials-incomplete', 'private-validation', False, False, False))
-        self.assertEqual(report['relations'], {'build-inventory': 1, 'engine-receipt': 1, 'identical': 147, 'managed-manifest': 2, 'outer-seal': 1,
-                                               'prepared-extractor': 1, 'signature-only': 14})
-        self.assertEqual((report['extractor']['signature_only_natives'], report['extractor']['identical_non_natives'], report['extractor']['members_verified']), (103, 40, 103))
-        self.assertEqual((report['receipts']['engine']['findings'], report['receipts']['engine']['spans'], report['receipts']['desktop']['spans_in_payload']), (74, 1011, 553))
-        self.assertEqual(report['distribution_validation']['error'], 'Private-validation output is never a distribution candidate')
+                         (want['status'], want['purpose'], want['coverage_validated'], want['distribution_candidate'], False))
+        self.assertEqual(report['relations'], want['relations'])
+        self.assertEqual({k: report['extractor'][k] for k in want['extractor']}, want['extractor'])
+        self.assertEqual({k: report['receipts'][k] for k in want['receipts']}, want['receipts'])
+        self.assertEqual(report['distribution_validation'], want['distribution_validation'])
         self.assertEqual(fm.canonical_inventory(signing.inventory_of(self.final)), before)
 
     def test_genuine_signed_bytes_reject_tampering_and_wrong_roles(self):
+        want = self.want
         policy, _ = signing.load_policy()
         roles = {signing.expand(r['path'], policy['resources'], EXE): r for r in policy['roles']}
-        bundle = 'labs.northwolf.omd-private-validation-20261102'
+        prefix, team = want['identifier_prefix'], want['team']
         before = (self.input / RES / 'bin/omd').read_bytes()
         after = (self.final / RES / 'bin/omd').read_bytes()
         layout, independent = signing.macho_layout(before)
         signing.signature_change(independent, layout, after)
-        fm.check_signature('bin/omd', roles[RES + '/bin/omd'], after, 'developer-id', 'ALPX923Y54', bundle + '.cli')
+        fm.check_signature('bin/omd', roles[RES + '/bin/omd'], after, 'developer-id', team, prefix + '.cli')
         tampered = bytearray(after)
         tampered[len(tampered) // 3] ^= 0xff
         with self.assertRaisesRegex(ValueError, 'other than the signature changed'):
             signing.signature_change(independent, layout, bytes(tampered))
-        for team, role, identifier, why in (('ZZZZZ99999', RES + '/bin/omd', bundle + '.cli', 'mode/team mismatch'),
-                                            ('ALPX923Y54', RES + '/tools/node/node', bundle + '.cli', 'entitlements differ'),
-                                            ('ALPX923Y54', RES + '/bin/omd', bundle + '.engine', 'unexpected signing identifier')):
+        other = 'ZZZZZ99999' if team != 'ZZZZZ99999' else 'YYYYY88888'
+        for wrong_team, role, identifier, why in ((other, RES + '/bin/omd', prefix + '.cli', 'mode/team mismatch'),
+                                                  (team, RES + '/tools/node/node', prefix + '.cli', 'entitlements differ'),
+                                                  (team, RES + '/bin/omd', prefix + '.engine', 'unexpected signing identifier')):
             with self.subTest(why), self.assertRaisesRegex(ValueError, why):
-                fm.check_signature('bin/omd', roles[role], after, 'developer-id', team, identifier)
+                fm.check_signature('bin/omd', roles[role], after, 'developer-id', wrong_team, identifier)
         worker = (self.final / RES / 'bin/omd-plugin-worker-v2').read_bytes()
         with self.assertRaisesRegex(ValueError, 'entitlements differ'):
-            fm.check_signature('worker', roles[RES + '/bin/omd'], worker, 'developer-id', 'ALPX923Y54', bundle + '.plugin-worker')
+            fm.check_signature('worker', roles[RES + '/bin/omd'], worker, 'developer-id', team, prefix + '.plugin-worker')
         slots = fm.code_directories((self.final / SHELL).read_bytes())
         self.assertTrue(slots and all(s[1] == digest((self.final / 'Contents/Info.plist').read_bytes()) and s[3] == digest((self.final / fm.SEAL).read_bytes()) for s in slots))
+        # Every nested app bundle (the macOS sign-in window) binds its own Info.plist and resource seal.
+        self.assertTrue(want['nested_bundles'])
+        for nested in want['nested_bundles']:
+            with self.subTest(nested):
+                bundle = self.final / RES / nested
+                info = signing.strict_plist(bundle / 'Contents/Info.plist')
+                code = (bundle / 'Contents/MacOS' / info['CFBundleExecutable']).read_bytes()
+                slots = fm.code_directories(code)
+                self.assertTrue(slots and all(s[1] == digest((bundle / 'Contents/Info.plist').read_bytes()) and s[3] == digest((bundle / fm.SEAL).read_bytes()) for s in slots))
+                self.assertEqual(info['CFBundleIdentifier'], want['nested_identifiers'][nested])
 
 
-@unittest.skipUnless(NATIVE and SOURCE_ADAPTER and SOURCE_KIT,
-                     'set OMD_FINAL_MATERIALS_SOURCE_ADAPTER (signing adapter evidence directory) and OMD_FINAL_MATERIALS_SOURCE_KIT (reviewed kit)')
+@unittest.skipUnless(NATIVE and SOURCE_PROOF, 'set OMD_FINAL_MATERIALS_SOURCE_PROOF to the real controlled-source proof description JSON')
 class GenuineSourceExtractor(unittest.TestCase):
     """Read-only: the v2 controlled-source proof of the binder on the real reviewed producer and
     its labelled ad-hoc changed-signature control (4 KiB pages), with the reviewed evidence, kit and
-    compiled bootloader. Development mode only: this is not a same-Team or Developer ID result."""
-    EVIDENCE = '51b8e3642c496883994d354e65340fd10110114e7711a55dc72e5024e0460822'
-    REPORT = '83b2f2b0686db0022af5eb52855431b41f1dfff32850de44d7fca0ead4b182b4'
+    compiled bootloader. Development mode only: this is not a same-Team or Developer ID result.
+    The description JSON names those inputs and the expected facts; it is regenerated per extractor."""
 
     @classmethod
     def setUpClass(cls):
-        root = Path(SOURCE_ADAPTER)
-        cls.producer = root / 'inputs/producer/omd-yt-dlp'
-        cls.prepared = root / 'real/control-4k/out/omd-yt-dlp'
-        cls.inputs = {'report': root / 'real/control-4k/work/extractor-report.json', 'evidence': root / 'evidence/source-evidence.json', 'evidence_sha256': cls.EVIDENCE,
-                      'kit': Path(SOURCE_KIT), 'kit_locator': 'delivery:ytdlp-source-kit/source-kit.tar.gz', 'bootloader': root / 'inputs/bootloader/run'}
+        cls.description = genuine(SOURCE_PROOF)
+        cls.want = cls.description['expect']
+        paths = cls.description['inputs']
+        cls.producer, cls.prepared = Path(paths['producer']), Path(paths['prepared'])
+        cls.inputs = {'report': Path(paths['report']), 'evidence': Path(paths['evidence']), 'evidence_sha256': cls.want['evidence_sha256'],
+                      'kit': Path(paths['kit']), 'kit_locator': paths['kit_locator'], 'bootloader': Path(paths['bootloader'])}
 
     def prove(self, **change):
-        args = {'producer_path': self.producer, 'prepared_path': self.prepared, 'version': '2026.08.19', 'target': 'arm64', 'mode': 'development-adhoc', 'team': None,
-                'inputs': self.inputs, 'report_sha256': self.REPORT, 'evidence_sha256': self.EVIDENCE,
-                'prepared_sha256': '75ce2c163e41e0d2b159a862477a5cc43aa81afa8413b4a2db28805bb2f45865', 'temp_root': None, **change}
+        want = self.want
+        args = {'producer_path': self.producer, 'prepared_path': self.prepared, 'version': want['version'], 'target': 'arm64', 'mode': 'development-adhoc', 'team': None,
+                'inputs': self.inputs, 'report_sha256': want['report_sha256'], 'evidence_sha256': want['evidence_sha256'],
+                'prepared_sha256': want['prepared_sha256'], 'temp_root': None, **change}
         return fm.prove_source_extractor(**args)
 
     def test_real_controlled_source_proof(self):
+        want = self.want
         before = {k: signing.file_identity(v) for k, v in (('producer', self.producer), ('prepared', self.prepared), *((k, self.inputs[k]) for k in ('report', 'evidence', 'kit', 'bootloader')))}
         result = self.prove()
         proof, members, source = result['proof'], result['cryptographic']['members'], result['source']
-        self.assertEqual((proof['method'], proof['signature_only_natives'], proof['identical_non_natives']), (fm.SOURCE_EXTRACTOR_METHOD, 99, 1107))
-        self.assertEqual((members['native_members'], members['verified'], members['failed'], result['cryptographic']['outer']['exit']), (99, 99, 0, 0))
-        self.assertEqual((source['members'], source['natives']), (1206, 99))
-        self.assertEqual((before['producer']['sha256'], before['prepared']['sha256']),
-                         ('82f044442f05edc077a4a3b70238186cdab99870407aa6ffb3366466867b9783', '75ce2c163e41e0d2b159a862477a5cc43aa81afa8413b4a2db28805bb2f45865'))
+        natives = want['native_members']
+        self.assertEqual((proof['method'], proof['signature_only_natives'], proof['identical_non_natives']), (fm.SOURCE_EXTRACTOR_METHOD, natives, want['identical_non_natives']))
+        self.assertEqual((members['native_members'], members['verified'], members['failed'], result['cryptographic']['outer']['exit']), (natives, natives, 0, 0))
+        self.assertEqual((source['members'], source['natives']), (natives + want['identical_non_natives'], natives))
+        self.assertEqual((before['producer']['sha256'], before['prepared']['sha256']), (want['producer_sha256'], want['prepared_sha256']))
         self.assertEqual((source['evidence']['sha256'], source['kit']['sha256'], source['bootloader']['sha256'], source['plan_sha256'], source['receipt_sha256'],
                           source['profile']['sha256']),
-                         (self.EVIDENCE, '10748f83c08e083ff3d49e4e48dde1fac946a40a7e45c46b6be0091d3b59bdab',
-                          '6164c9082504a628c58e3d3a7268cfd70cea3a0b70e41712cd4325e41d304ec8', 'bc6bc7e488b40fdab642b2c013303b29bb201732d873dc29814a610becf65a0b',
-                          '57b952254b8fb2a504d3937e57dc99d3f8d7625eae70508000bd12f862e2a5e1', '3822cd3dba4751ee41251203def6f20e3ebfa6eafada3fb20c5f24d3b6aa2c52'))
-        self.assertEqual((source['kit']['bytes'], source['bootloader']['bytes'], result['report']['sha256']), (278327344, 71952, self.REPORT))
+                         (want['evidence_sha256'], want['kit_sha256'], want['bootloader_sha256'], want['plan_sha256'], want['receipt_sha256'], want['profile_sha256']))
+        self.assertEqual((source['kit']['bytes'], source['bootloader']['bytes'], result['report']['sha256']), (want['kit_bytes'], want['bootloader_bytes'], want['report_sha256']))
         self.assertNotIn('/Volumes/', json.dumps({'report': result['report'], 'source': source}))
+        self.assertNotIn('/Users/', json.dumps({'report': result['report'], 'source': source}))
         self.assertEqual({k: signing.file_identity(v) for k, v in (('producer', self.producer), ('prepared', self.prepared),
                                                                    *((k, self.inputs[k]) for k in ('report', 'evidence', 'kit', 'bootloader')))}, before)
 
     def test_real_route_refusals(self):
+        other_version = '2000.01.01' if self.want['version'] != '2000.01.01' else '2000.01.02'
         cases = [({'prepared_path': self.producer}, 'The prepared extractor is the producer itself'),
                  ({'prepared_sha256': '0' * 64}, 'Prepared extractor changed before the source proof'),
                  ({'mode': 'developer-id', 'team': 'ZZZZZ99999'}, 'different signing mode or Team ID'),
                  ({'evidence_sha256': '0' * 64}, 'differs from the evidence the signing plan inspected'),
                  ({'report_sha256': '0' * 64}, 'Prepared extractor report digest differs'),
-                 ({'version': '2026.09.01'}, 'Report version or architecture differs')]
+                 ({'version': other_version}, 'Report version or architecture differs')]
         for change, why in cases:
             with self.subTest(why), self.assertRaisesRegex(ValueError, why):
                 self.prove(**change)
         # The stock route never proves the controlled-source pair.
         with self.assertRaisesRegex(ValueError, "LC_UUID is not PyInstaller's PKG-derived UUID for the pinned bootloader"):
             ex.verify_pair({'path': str(self.producer), 'sha256': digest(self.producer.read_bytes())}, {'path': str(self.prepared), 'sha256': digest(self.prepared.read_bytes())},
-                           '2026.08.19', 'arm64', 'development-adhoc', None, crypto=False)
+                           self.want['version'], 'arm64', 'development-adhoc', None, crypto=False)
 
 
 def tearDownModule():

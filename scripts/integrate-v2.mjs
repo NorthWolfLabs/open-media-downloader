@@ -91,7 +91,17 @@ try{
   await run('Build packaged runtime binaries (release)','cargo',['build','--release','--locked','--workspace',...RUNTIME_BINARIES.flatMap(name=>['--bin',name])]);
   const engineBin=path.join(engineTarget,'release');
   report.runtime_binaries=await Promise.all(RUNTIME_BINARIES.map(async name=>({name:name+exe,sha256:createHash('sha256').update(await readFile(path.join(engineBin,name+exe))).digest('hex')})));await save();
-  await run('Stage verified desktop resources','vp',['exec','node','scripts/stage-v2.mjs','--engine-bin',engineBin,'--tools',tools,'--browser-tools',browser,'--plugin-mode',plan.mode,...(pluginManifest?['--providers',pluginManifest]:[]),...(plan.supplements?['--supplements',plan.supplements]:[])],desktop);
+  // macOS stages the sign-in window as an app bundle carrying the desktop's reviewed icon,
+  // assembled exactly as the runtime packager does; other platforms stage the plain helper.
+  let stageBin=engineBin;
+  if(process.platform==='darwin'){
+   stageBin=path.join(output,'engine-bin');await mkdir(stageBin);
+   for(const name of RUNTIME_BINARIES.filter(name=>name!=='omd-signin'))await cp(path.join(engineBin,name),path.join(stageBin,name));
+   const icon=path.join(desktop,'src-tauri/icons/icon.icns');
+   await run('Assemble the macOS sign-in window app bundle','uv',['run','scripts/signin_bundle.py','--binary',path.join(engineBin,'omd-signin'),'--icon',icon,'--icon-sha256',createHash('sha256').update(await readFile(icon)).digest('hex'),
+    '--target',process.arch==='arm64'?'darwin-arm64':'darwin-x64','--output',path.join(stageBin,'OMD Sign-In.app')]);
+  }
+  await run('Stage verified desktop resources','vp',['exec','node','scripts/stage-v2.mjs','--engine-bin',stageBin,'--tools',tools,'--browser-tools',browser,'--plugin-mode',plan.mode,...(pluginManifest?['--providers',pluginManifest]:[]),...(plan.supplements?['--supplements',plan.supplements]:[])],desktop);
   const staged=path.join(desktop,'src-tauri/resources/v2');
   if(plan.publishable)await run('Check public resource inventory','vp',['exec','node','scripts/plugin-policy.mjs','--check-public',staged],desktop);
   const inventory=await readFile(path.join(staged,'build-inventory.json'));

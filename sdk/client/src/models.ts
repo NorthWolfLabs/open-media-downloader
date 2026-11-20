@@ -478,6 +478,11 @@ export interface ProviderManifest {
   account_mode?: AccountMode | null;
   api: string;
   browser?: boolean;
+  /**
+   * The operations this source implements (such as `search`, `releases`
+   * and `resolve`), plus `collection_hint` when its `resolve` reads the
+   * request's `collection_hint`.
+   */
   capabilities: string[];
   description: string;
   grants: HostGrant[];
@@ -526,6 +531,19 @@ export interface SignIn {
  * via the `definition` "ProviderRequest".
  */
 export interface ProviderRequest {
+  /**
+   * Sent only to a source whose manifest declares the `collection_hint`
+   * capability, and only on `resolve`, when the engine resolves a release
+   * again for a download: the collection the release was listed under when
+   * it was selected (for example a search-results or playlist collection),
+   * or the collection of an approved plan being refreshed. A source that
+   * files a release under more than one collection may return this
+   * collection as the release's collection while the release still belongs
+   * to it. The engine still requires the returned collection to match.
+   * Absent otherwise: a source that does not declare the capability gets
+   * requests without this field.
+   */
+  collection_hint?: SourceRef | null;
   credential_profile?: string | null;
   cursor?: string | null;
   discovery?: DiscoveryQuery | null;

@@ -197,13 +197,7 @@ fn missing() -> ApiError {
     )
 }
 async fn validate_client(app: &App, id: &str) -> Result<(), ApiError> {
-    if app
-        .clients
-        .lock()
-        .await
-        .get(id)
-        .is_none_or(|lease| lease.elapsed().as_secs() >= 45)
-    {
+    if !app.clients.lock().await.is_live(id) {
         return Err(missing());
     }
     Ok(())
@@ -239,6 +233,11 @@ async fn register(app: &App, installed: &Installed) -> Result<(), ApiError> {
         .await;
     Ok(())
 }
+/// The label the engine gives the browser kit a distribution includes.
+pub(crate) const INCLUDED_BROWSER_LABEL: &str = "Included browser";
+/// The browser kit a person last activated themselves; see
+/// [`tools::CHOSEN_TOOLS`].
+pub(crate) const CHOSEN_BROWSER: &str = "chosen_browser";
 pub async fn initialize(
     store: &Store,
     profile: &std::path::Path,
@@ -256,6 +255,7 @@ pub async fn initialize(
             let kit = packages_store::read_manifest(path).await?;
             let review = packages_store::review(&kit).await?;
             let previous = tools::bundled_digest(store, "bundled_browser_review").await;
+            let chosen = tools::bundled_digest(store, CHOSEN_BROWSER).await;
             store
                 .set_setting("bundled_browser_review", &json!(review))
                 .await
@@ -274,20 +274,32 @@ pub async fn initialize(
                         "Could not read browser installation history.",
                     )
                 })?;
-            let active: Option<String> =
-                sqlx::query_scalar("SELECT digest FROM browser_package_active WHERE singleton=1")
-                    .fetch_one(&store.pool)
-                    .await
-                    .map_err(|_| {
-                        Problem::new("browser_storage", "Could not read the active browser.")
-                    })?;
-            // Same policy as the media tools: an upgrade replaces the browser the
-            // previous app included while it is still active.
+            let active = tools::active_entry(
+                store,
+                "SELECT a.digest,p.label FROM browser_package_active a \
+                 LEFT JOIN browser_packages p ON p.digest=a.digest WHERE a.singleton=1",
+            )
+            .await
+            .map_err(|_| Problem::new("browser_storage", "Could not read the active browser."))?;
+            // Same policy as the media tools: an upgrade replaces an included
+            // browser that is still active, unless the person activated it.
             if count == 0
-                || tools::adopts_bundled(previous.as_deref(), active.as_deref(), &review.digest)
+                || tools::adopts_bundled(
+                    previous.as_deref(),
+                    active.as_ref().map(|(d, l)| (d.as_str(), l.as_str())),
+                    INCLUDED_BROWSER_LABEL,
+                    &review.digest,
+                    chosen.as_deref(),
+                )
             {
-                packages_store::install(store, profile, &kit, &review.digest, "Included browser")
-                    .await?;
+                packages_store::install(
+                    store,
+                    profile,
+                    &kit,
+                    &review.digest,
+                    INCLUDED_BROWSER_LABEL,
+                )
+                .await?;
                 packages_store::activate(store, profile, &review.digest).await?;
             }
             Ok::<_, Problem>(())
@@ -423,6 +435,13 @@ pub(crate) async fn activate(
     app.store
         .set_setting("browser_bootstrap_issue", &Value::Null)
         .await?;
+    tools::record_choice(
+        &app.store,
+        CHOSEN_BROWSER,
+        "bundled_browser_review",
+        &installed.digest,
+    )
+    .await?;
     Ok(Json(installed))
 }
 pub(crate) async fn remove(

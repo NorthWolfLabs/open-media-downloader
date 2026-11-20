@@ -3,7 +3,8 @@
 # ///
 """Package explicit engine inputs; no desktop imports or developer runtime at use time."""
 import argparse
-from materials_contract import validate as validate_materials, sha as materials_sha, validate_native_receipt
+from materials_contract import validate as validate_materials, sha as materials_sha, validate_native_receipt, binary_path, macos, SIGN_IN_BINARY
+import signin_bundle
 import gzip
 import hashlib
 import json
@@ -108,6 +109,20 @@ def package(args):
     if staging_mode == "release":
         require(getattr(args, "materials", None) and getattr(args, "materials_locks", None), "Release staging requires materials and locks")
     require(args.target in TARGETS, 'Unsupported target')
+    # macOS installs the sign-in window as an app bundle; its icon is an explicit,
+    # digest-pinned input that the desktop project supplies. Other targets take none.
+    icon = getattr(args, 'signin_icon', None), getattr(args, 'signin_icon_sha256', None)
+    # A signed helper (signed as the nested bundle, as in the signed app) needs its bundle
+    # seal too: its code directory binds Info.plist and Contents/_CodeSignature/CodeResources.
+    seal = getattr(args, 'signin_seal', None), getattr(args, 'signin_seal_sha256', None)
+    if macos(args.target):
+        require(all(icon), 'macOS targets require --signin-icon and --signin-icon-sha256')
+        icon = regular(icon[0]), digest(icon[1])
+        require(all(seal) or not any(seal), 'Use --signin-seal together with --signin-seal-sha256')
+        seal = (regular(seal[0]), digest(seal[1])) if all(seal) else None
+    else:
+        require(not any(icon), 'Only macOS targets take a sign-in window icon')
+        require(not any(seal), 'Only macOS targets take a sign-in window seal')
     output = Path(os.path.abspath(args.output))
     output.parent.mkdir(parents=True, exist_ok=True)
     regular(output.parent, directory=True)
@@ -121,7 +136,7 @@ def package(args):
         provenance = []
         names = set()
 
-        def copy(src, dest, expected=None, size=None, executable=False):
+        def copy(src, dest, expected=None, size=None, executable=False, mode=None):
             src = regular(src)
             key = str(relative(dest)).casefold()
             require(key not in names, f'Duplicate output: {dest}')
@@ -136,7 +151,7 @@ def package(args):
             with src.open('rb') as inp, dst.open('xb') as out:
                 shutil.copyfileobj(inp, out)
             require(identity(dst) == before, f'Input changed during copy: {src}')
-            mode = 0o755 if executable or src.stat().st_mode & 0o111 else 0o644
+            mode = mode if mode is not None else 0o755 if executable or src.stat().st_mode & 0o111 else 0o644
             dst.chmod(mode)
             entries.append({'path': dest, 'mode': mode, **before})
             provenance.append({'path': dest, 'source': str(src), **before})
@@ -145,11 +160,39 @@ def package(args):
             dump(stage / dest, value)
             entries.append({'path': dest, 'mode': 0o644, **identity(stage / dest)})
 
+        def sign_in_bundle(binary):
+            """bin/OMD Sign-In.app from the compiled helper, the icon and a generated Info.plist."""
+            prefix = 'bin/' + signin_bundle.BUNDLE + '/'
+            files = signin_bundle.members(binary.read_bytes(), icon[0].read_bytes(), args.version, args.target)
+            copy(binary, prefix + signin_bundle.EXECUTABLE, mode=files[signin_bundle.EXECUTABLE][1])
+            copy(icon[0], prefix + signin_bundle.ICON, icon[1], mode=files[signin_bundle.ICON][1])
+            data, mode = files[signin_bundle.INFO]
+            key = (prefix + signin_bundle.INFO).casefold()
+            require(key not in names, 'Duplicate output: ' + prefix + signin_bundle.INFO)
+            names.add(key)
+            with (stage / prefix / signin_bundle.INFO).open('xb') as out:
+                out.write(data)
+            (stage / prefix / signin_bundle.INFO).chmod(mode)
+            entries.append({'path': prefix + signin_bundle.INFO, 'mode': mode, **identity(stage / prefix / signin_bundle.INFO)})
+            for rel, (data, mode) in files.items():
+                require(identity(stage / prefix / rel) == {'sha256': hashlib.sha256(data).hexdigest(), 'size': len(data)}, 'Sign-in bundle member changed: ' + rel)
+            if seal:
+                # Exactly the signed bundle's seal; the static proof requires every SHA-256
+                # code directory of the helper to bind this Info.plist (slot 1) and this seal
+                # (slot 3), and the seal to cover exactly the icon. codesign verification and
+                # notarization of the assembled tree remain separate steps.
+                copy(seal[0], prefix + signin_bundle.SEAL, seal[1], mode=0o644)
+                import macos_signing
+                macos_signing.nested_seal(stage / prefix, {'executable': signin_bundle.EXECUTABLE, 'members': list(signin_bundle.MEMBERS)})
+
         suffix = '.exe' if args.target.startswith('win32') else ''
         for name in BINS:
             src = regular(args.engine_bin / (name + suffix))
             if name == 'omd-plugin-worker-v2':
                 require(b'OMD_WORKER_PROFILE=release' in src.read_bytes(), 'Optimized release worker required')
+            if name == SIGN_IN_BINARY and macos(args.target):
+                sign_in_bundle(src)
+                continue
             copy(src, 'bin/' + name + suffix, executable=True)
         license_path = regular(args.license)
         require('MIT License' in license_path.read_text(), 'Project MIT license required')
@@ -213,7 +256,7 @@ def package(args):
         if staging_mode == 'release':
             locks_root = regular(args.materials_locks, directory=True)
             locks = {name: identity(regular(locks_root / name))['sha256'] for name in ('Cargo.lock', 'browser-package-lock.json')}
-            required = {name: {'version': args.version, 'prefix': 'bin/' + name + suffix} for name in BINS}
+            required = {name: {'version': args.version, 'prefix': binary_path(name, args.target)} for name in BINS}
             required.update({name: {'version': tools[name]['version'], 'prefix': 'tools/' + name + '/'} for name in ('yt_dlp', 'ffmpeg', 'ffprobe', 'node')})
             required['browser'] = {'version': browser['version'], 'prefix': 'browser/content/'}
             require(locks['Cargo.lock'] == identity(Path(__file__).resolve().parent.parent / 'Cargo.lock')['sha256'], 'Stale engine Cargo lock')
@@ -265,6 +308,10 @@ def main():
     p.add_argument('--staging-mode', choices=('development', 'release'), default='development')
     p.add_argument('--materials', type=Path)
     p.add_argument('--materials-locks', type=Path)
+    p.add_argument('--signin-icon', type=Path, help='macOS targets: reviewed ICNS for the sign-in window bundle')
+    p.add_argument('--signin-icon-sha256', help='macOS targets: SHA-256 of --signin-icon')
+    p.add_argument('--signin-seal', type=Path, help='macOS targets with a signed helper: the signed bundle\'s Contents/_CodeSignature/CodeResources')
+    p.add_argument('--signin-seal-sha256', help='macOS targets: SHA-256 of --signin-seal')
     args = p.parse_args()
     print(json.dumps(package(args), indent=2))
 

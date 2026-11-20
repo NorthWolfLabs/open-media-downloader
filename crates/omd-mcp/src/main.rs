@@ -587,8 +587,16 @@ async fn run() -> Result<(), Value> {
             "Full access requires an admin token",
         ));
     }
+    // An agent can submit downloads and disconnect; ask the engine to finish
+    // them before it stops. Earlier engines ignore the option.
     let lease = e
-        .call(Method::POST, &["v2", "clients"], None, None, None)
+        .call(
+            Method::POST,
+            &["v2", "clients"],
+            Some(&json!({"finish_downloads": true})),
+            None,
+            None,
+        )
         .await?;
     let id = lease["id"]
         .as_str()

@@ -119,7 +119,7 @@ async fn independent_client_sign_in_keeps_identity_provider_secrets_out_of_vault
             },
         )]))),
         running: Arc::new(AsyncMutex::new(BTreeMap::new())),
-        clients: Arc::new(AsyncMutex::new(BTreeMap::new())),
+        clients: Default::default(),
     };
     let api = router(app.clone(), vec![]);
     let call = async |method: &str, path: &str, body: Value| {
@@ -326,9 +326,12 @@ async fn independent_client_sign_in_keeps_identity_provider_secrets_out_of_vault
     )
     .await;
     assert_eq!(status, 200);
-    app.clients.lock().await.insert(
+    app.clients.lock().await.leases.insert(
         owner.into(),
-        tokio::time::Instant::now() - std::time::Duration::from_secs(46),
+        omd_service::Lease {
+            seen: tokio::time::Instant::now() - std::time::Duration::from_secs(46),
+            finish_downloads: false,
+        },
     );
     assert_eq!(
         call(

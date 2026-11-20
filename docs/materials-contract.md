@@ -13,6 +13,9 @@ repeated `--artifact NAME=FILE`. Roots must own the selected binary targets.
 For standalone select omd-cli, omd-service, omd-mcp, omd-plugin-worker-v2,
 omd-isolation, omd-notifications and omd-signin; binaries are omd, omd-engine,
 omd-mcp, omd-plugin-worker-v2, omd-helper-guardian, omd-notify and omd-signin.
+Receipts name binaries; their installed paths are `bin/NAME` (`bin/NAME.exe` on
+Windows), except that macOS installs the sign-in window as an app bundle. There its
+artifact is the bundle executable `bin/OMD Sign-In.app/Contents/MacOS/omd-signin`.
 For desktop select open-media-downloader-desktop with features v2 in its
 independent native manifest.
 
@@ -163,7 +166,11 @@ own package, or by the runtime finding. There must be exactly one runtime findin
 with materials. A package with only review texts needs a full legal text, and
 copied sources need both terms and a notice. A v1 receipt never had a review
 path, so it can no longer satisfy release staging.
-Use a receipt selecting the five engine binaries for desktop staging. Plugin
+Use a receipt selecting the six engine binaries for desktop staging.
+On macOS the required `omd-signin` component's artifact is the bundle executable
+`bin/OMD Sign-In.app/Contents/MacOS/omd-signin`. Like every installed file, the bundle's
+`Contents/Info.plist` and `Contents/Resources/AppIcon.icns` must be covered, normally by the
+same component. Plugin
 `publishable` describes only plugin selection. It never accepts materials or a
 platform release. Successful coverage validation still has release_accepted:false.
 
@@ -205,8 +212,10 @@ Signing changes code bytes, so an `omd-materials-v1` manifest cannot describe a 
 payload. It stays the unchanged **initial review**: reviewed facts bound to original,
 pre-signature artifact digests and validated at staging. A separate **final binding**
 connects those facts to the signed bytes, outside the app (a document inside the app
-would have to hash itself). Schema `omd-final-materials-v1` is versioned; v1 and its
-fixtures are unchanged, and a v1 manifest checked against signed bytes still fails.
+would have to hash itself). Schema `omd-final-materials-v1` is versioned, and a v1
+manifest checked against signed bytes still fails. Since 0.2.3 both final contracts also
+accept the nested macOS sign-in bundle (below). Documents without a nested bundle validate
+exactly as before, and the shared fixtures gained cases for it.
 
 Flow: stage with `--staging-mode release --materials-binding two-phase` (desktop
 `stage-v2.mjs`; it defers only `desktop-rust` and `frontend`, whose executable does not
@@ -248,6 +257,14 @@ Every relation is recomputed from actual input and signed bytes; report claims s
   artifacts must bind the pre-signature binaries.
 - `outer-seal`: `CodeResources` must hash exactly every other payload file, and every
   SHA-256 code directory of the outer executable must bind `Info.plist` and the seal.
+- `nested-seal`: the one new file signing adds inside a nested app bundle under the
+  resources (`bin/OMD Sign-In.app/Contents/_CodeSignature/CodeResources`). Its main
+  executable is a `signature-only` code object, and its Info.plist and icon are `identical`.
+  The seal must be new, must hash exactly the bundle's other resources (`sealed_files`),
+  and every SHA-256 code directory of the bundle executable must bind the bundle's
+  Info.plist and this seal. The build inventory relation expects the signer to append this
+  seal after the staged rows. Like the outer seal it is a signing output, so a final-review
+  component must cover it.
 - `identical`: everything else, byte for byte.
 
 Unexpected changes, additions or removals, unrecognized code and unsupported layouts are
@@ -486,5 +503,10 @@ versions, Intel, revocation, quarantined pristine-account installation or GUI be
 Changing the ticket path, size bound, transport attributes, targets or archive layout needs
 method review and a new version.
 
-Native private-pair rehearsals additionally use OMD_FINAL_MATERIALS_EXTRACTOR
-for the absolute prepared extractor path; no developer-machine path is assumed.
+The opt-in real-data classes read a description JSON that is written next to the genuine
+evidence, so a release round regenerates it without editing the suites:
+OMD_FINAL_MATERIALS_GENUINE_PAIR (bind-final-materials.py prepare options of a signed pair and
+the expected binding facts), OMD_FINAL_MATERIALS_SOURCE_PROOF (the controlled-source producer,
+its ad-hoc control, evidence, kit, bootloader and expected proof facts) and
+OMD_NOTARIZED_MATERIALS_CHAIN (bind-notarized-materials.py options and expected ticket, outer
+code, binding digest and member counts). No developer-machine path is assumed.

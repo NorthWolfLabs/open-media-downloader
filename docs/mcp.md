@@ -149,9 +149,10 @@ inspect state before retrying. Structured failures preserve engine recovery acti
 MCP attaches/heartbeats its own client lease. EOF, initialization failure,
 SIGINT/SIGTERM and transport shutdown attempt detach; heartbeat loss ends the
 connection. Abrupt process loss relies on lease expiration. Sign-in sessions use
-that lease and the engine cleans up expired owners. Without background mode the
-last client's departure permits engine checkpoint/exit. No silent auto-start or
-startup-setting change occurs.
+that lease and the engine cleans up expired owners. The MCP server attaches with
+`finish_downloads`, so without background mode, when it is the last client to
+leave, the engine checkpoints and exits once no download is queued or running.
+No silent auto-start or startup-setting change occurs.
 
 ## Develop and verify
 

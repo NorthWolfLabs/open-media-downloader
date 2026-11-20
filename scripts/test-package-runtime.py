@@ -3,7 +3,10 @@
 # ///
 import argparse
 import copy
+import hashlib
 import os
+import plistlib
+import struct
 import shutil
 import stat
 import subprocess
@@ -23,6 +26,18 @@ def module(name):
 
 p = module('package-runtime')
 s = module('smoke-runtime')
+BUNDLE = 'bin/OMD Sign-In.app/'
+
+
+def macho(cpu=0x100000c, minimum=(11, 0), filetype=2):
+    """A minimal thin 64-bit Mach-O with one LC_BUILD_VERSION (macOS) load command."""
+    version = minimum[0] << 16 | minimum[1] << 8
+    return struct.pack('<8I', 0xfeedfacf, cpu, 0, filetype, 1, 24, 0, 0) + struct.pack('<6I', 0x32, 24, 1, version, version, 0) + b'omd-signin fixture'
+
+
+def icns(payload=b'fixture artwork'):
+    entry = b'ic07' + struct.pack('>I', 8 + len(payload)) + payload
+    return b'icns' + struct.pack('>I', 8 + len(entry)) + entry
 
 
 class Packaging(unittest.TestCase):
@@ -37,7 +52,8 @@ class Packaging(unittest.TestCase):
             return file
         self.put = put
         for name in p.BINS:
-            put('bin/' + name, b'OMD_WORKER_PROFILE=release' if 'worker' in name else name.encode())
+            put('bin/' + name, b'OMD_WORKER_PROFILE=release' if 'worker' in name else macho() if name == 'omd-signin' else name.encode())
+        icon = put('icon/AppIcon.icns', icns())
         tools = {}
         for name in ('node', 'yt_dlp', 'ffmpeg', 'ffprobe'):
             file = put('tools/' + name, name.encode())
@@ -51,7 +67,8 @@ class Packaging(unittest.TestCase):
         put('LICENSE', b'MIT License\nfixture')
         file = put('notice', b'explicit fixture notice')
         p.dump(self.root / 'supplements.json', [{'name': 'notice', 'path': 'notice', 'sha256': p.identity(file)['sha256']}])
-        self.args = argparse.Namespace(engine_bin=self.root / 'bin', tools=self.root / 'tools/manifest.json', browser_tools=self.root / 'browser.json', license=self.root / 'LICENSE', supplements=self.root / 'supplements.json', output=self.root / 'output', target='darwin-arm64', version='1')
+        self.args = argparse.Namespace(engine_bin=self.root / 'bin', tools=self.root / 'tools/manifest.json', browser_tools=self.root / 'browser.json', license=self.root / 'LICENSE', supplements=self.root / 'supplements.json', output=self.root / 'output', target='darwin-arm64', version='1',
+                                       signin_icon=icon, signin_icon_sha256=p.identity(icon)['sha256'])
         self.original = {x: x.read_bytes() for x in self.root.rglob('*') if x.is_file()}
 
     def mutate(self, file, change):
@@ -93,8 +110,14 @@ class Packaging(unittest.TestCase):
                 self.setUp()
                 self.check_release_target(target, triple)
 
+    def other_platform(self, target):
+        self.args.target, self.args.signin_icon, self.args.signin_icon_sha256 = target, None, None
+
     def check_release_target(self, target, triple):
-        self.args.target = target
+        if target.startswith('darwin'):
+            self.args.target = target
+        else:
+            self.other_platform(target)
         suffix = '.exe' if target.startswith('win32') else ''
         if suffix:
             for name in p.BINS:
@@ -126,6 +149,9 @@ class Packaging(unittest.TestCase):
         self.args.supplements.write_text(json.dumps(supplements))
         p.package(self.args)
         files = {x['path']: x['sha256'] for x in p.load(self.args.output / 'runtime/runtime-inventory.json')['files']}
+        # The receipt binds the macOS sign-in helper at its bundle executable path.
+        self.assertEqual(BUNDLE + 'Contents/MacOS/omd-signin' in files, target.startswith('darwin'))
+        self.assertEqual('bin/omd-signin' + suffix in files, not target.startswith('darwin'))
         material = {'third-party/notice': files['third-party/notice']}
         manifest = {'schema': 'omd-materials-v1', 'reviewed': True, 'pending': [], 'target': target, 'version': '1', 'locks': {name: p.identity(self.root / 'locks' / name)['sha256'] for name in ('Cargo.lock', 'browser-package-lock.json')}, 'components': [{'id': name, 'version': '1', 'status': 'reviewed', 'pending': [], 'artifacts': files, 'materials': {kind: material for kind in ('notices', 'source', 'instructions', 'provenance')}} for name in (*p.BINS, 'node', 'yt_dlp', 'ffmpeg', 'ffprobe', 'browser')]}
         p.dump(self.root / 'materials.json', manifest)
@@ -146,6 +172,74 @@ class Packaging(unittest.TestCase):
     def test_sign_in_window_is_required(self):
         (self.root / 'bin/omd-signin').unlink()
         self.rejected()
+
+    def test_macos_sign_in_window_is_a_deterministic_app_bundle(self):
+        result = p.package(self.args)
+        runtime = self.args.output / 'runtime'
+        rows = {x['path']: x for x in p.load(runtime / 'runtime-inventory.json')['files']}
+        bundle = {path[len(BUNDLE):]: row for path, row in rows.items() if path.startswith(BUNDLE)}
+        self.assertEqual({rel: row['mode'] for rel, row in bundle.items()},
+                         {'Contents/Info.plist': 0o644, 'Contents/MacOS/omd-signin': 0o755, 'Contents/Resources/AppIcon.icns': 0o644})
+        self.assertNotIn('bin/omd-signin', rows)
+        self.assertFalse((runtime / 'bin/omd-signin').exists())
+        self.assertEqual((runtime / BUNDLE / 'Contents/MacOS/omd-signin').read_bytes(), macho())
+        self.assertEqual((runtime / BUNDLE / 'Contents/Resources/AppIcon.icns').read_bytes(), icns())
+        if os.name == 'posix':
+            for rel, row in bundle.items():
+                self.assertEqual(stat.S_IMODE((runtime / BUNDLE / rel).stat().st_mode), row['mode'], rel)
+        info = (runtime / BUNDLE / 'Contents/Info.plist').read_bytes()
+        self.assertEqual(plistlib.loads(info), {
+            'CFBundleDisplayName': 'OMD Sign-In', 'CFBundleExecutable': 'omd-signin', 'CFBundleIconFile': 'AppIcon',
+            'CFBundleIdentifier': 'labs.northwolf.omd.signin', 'CFBundleInfoDictionaryVersion': '6.0', 'CFBundleName': 'OMD Sign-In',
+            'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '1', 'CFBundleVersion': '1',
+            'LSMinimumSystemVersion': '11.0.0', 'NSHighResolutionCapable': True})
+        # Sorted-key XML: the same bytes for the same version and executable minimum.
+        self.assertEqual(info, plistlib.dumps(plistlib.loads(info), fmt=plistlib.FMT_XML, sort_keys=True))
+        self.assertEqual(hashlib.sha256(info).hexdigest(), 'c7767d5617695b94f6f479e7bfc10afd93a0eacf6701a2e38a700d4ab12fe762')
+        import tarfile
+        with tarfile.open(self.args.output / result['archive']) as archive:
+            members = {m.name: m for m in archive}
+        self.assertEqual({m[len(BUNDLE):]: members[m].mode for m in members if m.startswith(BUNDLE)},
+                         {rel: row['mode'] for rel, row in bundle.items()})
+        self.assertNotIn('bin/omd-signin', members)
+        extracted = self.root / 'extracted-bundle'
+        extracted.mkdir()
+        s.extract(self.args.output / result['archive'], extracted)
+        self.assertTrue(os.access(extracted / BUNDLE / 'Contents/MacOS/omd-signin', os.X_OK))
+        self.args.output = self.root / 'again'
+        self.assertEqual(p.package(self.args)['sha256'], result['sha256'])
+
+    def test_macos_bundle_inputs_are_explicit_and_checked(self):
+        cases = [
+            ('missing icon', lambda: setattr(self.args, 'signin_icon', None)),
+            ('missing icon digest', lambda: setattr(self.args, 'signin_icon_sha256', None)),
+            ('wrong icon digest', lambda: setattr(self.args, 'signin_icon_sha256', '0' * 64)),
+            ('icon is not ICNS', lambda: (self.put('icon/AppIcon.icns', b'\x89PNG fixture artwork'), setattr(self.args, 'signin_icon_sha256', hashlib.sha256(b'\x89PNG fixture artwork').hexdigest()))),
+            ('truncated ICNS', lambda: (self.put('icon/AppIcon.icns', icns()[:-1]), setattr(self.args, 'signin_icon_sha256', hashlib.sha256(icns()[:-1]).hexdigest()))),
+            ('helper is not Mach-O', lambda: self.put('bin/omd-signin', b'omd-signin')),
+            ('helper is a library', lambda: self.put('bin/omd-signin', macho(filetype=6))),
+            ('helper lacks the target slice', lambda: setattr(self.args, 'target', 'darwin-x64')),
+            ('version is not numeric', lambda: setattr(self.args, 'version', '1.0-beta')),
+        ]
+        for name, change in cases:
+            with self.subTest(name):
+                self.setUp()
+                change()
+                self.rejected()
+
+    def test_linux_and_windows_keep_the_bare_sign_in_helper(self):
+        for target, suffix in (('linux-x64', ''), ('win32-x64', '.exe')):
+            with self.subTest(target):
+                self.setUp()
+                for name in p.BINS:
+                    self.put('bin/' + name + suffix, (self.root / 'bin' / name).read_bytes())
+                self.args.target = target
+                self.rejected()
+                self.other_platform(target)
+                p.package(self.args)
+                paths = {x['path'] for x in p.load(self.args.output / 'runtime/runtime-inventory.json')['files']}
+                self.assertIn('bin/omd-signin' + suffix, paths)
+                self.assertFalse(any(path.startswith(BUNDLE) for path in paths))
 
     def test_missing_digest(self):
         self.mutate('tools/manifest.json', lambda x: x['node'].pop('sha256'))
@@ -234,7 +328,7 @@ class Packaging(unittest.TestCase):
     def test_windows_zip(self):
         for name in p.BINS:
             self.put('bin/' + name + '.exe', (self.root / 'bin' / name).read_bytes())
-        self.args.target = 'win32-x64'
+        self.other_platform('win32-x64')
         result = p.package(self.args)
         extracted = self.root / 'zip'
         extracted.mkdir()
@@ -279,7 +373,7 @@ class Packaging(unittest.TestCase):
                     data[0]['path'] = relocate(data[0]['path'])
                 path.write_text(json.dumps(data))
             args = copy.copy(self.args)
-            for name in ('engine_bin', 'tools', 'browser_tools', 'license', 'supplements', 'output'):
+            for name in ('engine_bin', 'tools', 'browser_tools', 'license', 'supplements', 'output', 'signin_icon'):
                 setattr(args, name, moved / getattr(self.args, name).relative_to(self.root))
             second = p.package(args)
             self.assertEqual(first['sha256'], second['sha256'])
@@ -360,6 +454,104 @@ class Packaging(unittest.TestCase):
                 mutate(changed)
                 with self.assertRaises(ValueError):
                     s.verify_state(inventory, media, browser, *changed)
+
+
+class SignInBundleEntry(unittest.TestCase):
+    """The assembly entry used by development integration: the packager's exact members."""
+
+    def test_assembles_the_same_bundle_and_refuses_unsafe_requests(self):
+        bundle = module('signin_bundle')
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder).resolve()
+            (root / 'omd-signin').write_bytes(macho())
+            (root / 'AppIcon.icns').write_bytes(icns())
+            sha = hashlib.sha256(icns()).hexdigest()
+            args = ['--binary', str(root / 'omd-signin'), '--icon', str(root / 'AppIcon.icns'), '--icon-sha256', sha, '--target', 'darwin-arm64', '--version', '1']
+            report = bundle.main([*args, '--output', str(root / 'OMD Sign-In.app')])
+            self.assertEqual(report['identifier'], 'labs.northwolf.omd.signin')
+            for rel, (data, mode) in bundle.members(macho(), icns(), '1', 'darwin-arm64').items():
+                self.assertEqual((root / 'OMD Sign-In.app' / rel).read_bytes(), data, rel)
+                if os.name == 'posix':
+                    self.assertEqual(stat.S_IMODE((root / 'OMD Sign-In.app' / rel).stat().st_mode), mode, rel)
+            self.assertEqual(hashlib.sha256((root / 'OMD Sign-In.app/Contents/Info.plist').read_bytes()).hexdigest(), 'c7767d5617695b94f6f479e7bfc10afd93a0eacf6701a2e38a700d4ab12fe762')
+            self.assertEqual(plistlib.loads((root / 'OMD Sign-In.app/Contents/Info.plist').read_bytes())['CFBundleShortVersionString'], '1')
+            for output, change, why in ((root / 'OMD Sign-In.app', {}, 'new --output'), (root / 'Other.app', {}, 'new --output'),
+                                        (root / 'x' / 'OMD Sign-In.app', {}, 'new --output'), (root / 'fresh' / 'OMD Sign-In.app', {'--icon-sha256': '0' * 64}, 'pinned digest')):
+                output.parent.mkdir(exist_ok=True) if output.parent.name == 'fresh' else None
+                request = [*args, '--output', str(output)]
+                for key, value in change.items():
+                    request[request.index(key) + 1] = value
+                with self.subTest(str(output)), self.assertRaisesRegex(ValueError, why):
+                    bundle.main(request)
+            self.assertFalse((root / 'fresh' / 'OMD Sign-In.app').exists())
+
+
+
+NATIVE = os.uname().sysname == 'Darwin' if hasattr(os, 'uname') else False
+NATIVE = NATIVE and shutil.which('xcrun') is not None and Path('/usr/bin/codesign').exists()
+
+
+@unittest.skipUnless(NATIVE, 'needs macOS clang and codesign')
+class SignedSignInBundle(unittest.TestCase):
+    """A helper signed as the nested bundle (here ad-hoc, as a stand-in for Developer ID)
+    is packaged with exactly its bundle seal, which its code directory binds."""
+
+    def setUp(self):
+        self.case = Packaging(methodName='test_exact_archive_and_preserved_inputs')
+        self.case.setUp()
+        self.addCleanup(self.case.doCleanups)
+        self.root, self.args = self.case.root, self.case.args
+        work = self.root / 'signed'
+        work.mkdir()
+        (work / 'main.c').write_text('int main(void) { return 0; }\n')
+        subprocess.run(['xcrun', 'clang', '-arch', 'arm64', '-mmacosx-version-min=13.0', '-O0', '-o', work / 'omd-signin', work / 'main.c'], check=True, capture_output=True)
+        bundle_module = module('signin_bundle')
+        self.icon = icns()
+        self.bundle = work / 'OMD Sign-In.app'
+        for rel, (data, mode) in bundle_module.members((work / 'omd-signin').read_bytes(), self.icon, '1', 'darwin-arm64').items():
+            (self.bundle / rel).parent.mkdir(parents=True, exist_ok=True)
+            (self.bundle / rel).write_bytes(data)
+            (self.bundle / rel).chmod(mode)
+        self.sign()
+        self.case.put('bin/omd-signin', (self.bundle / 'Contents/MacOS/omd-signin').read_bytes())
+        self.seal = self.bundle / 'Contents/_CodeSignature/CodeResources'
+        self.args.signin_seal, self.args.signin_seal_sha256 = self.seal, p.identity(self.seal)['sha256']
+
+    def sign(self):
+        subprocess.run(['/usr/bin/codesign', '--force', '--sign', '-', '--options', 'runtime', '--timestamp=none',
+                        '--identifier', 'labs.northwolf.omd.signin', self.bundle], check=True, capture_output=True)
+
+    def test_signed_helper_ships_with_its_exact_seal(self):
+        result = p.package(self.args)
+        runtime = self.args.output / 'runtime'
+        rows = {x['path']: x for x in p.load(runtime / 'runtime-inventory.json')['files']}
+        bundle = {path[len(BUNDLE):]: row for path, row in rows.items() if path.startswith(BUNDLE)}
+        self.assertEqual({rel: row['mode'] for rel, row in bundle.items()},
+                         {'Contents/Info.plist': 0o644, 'Contents/MacOS/omd-signin': 0o755, 'Contents/Resources/AppIcon.icns': 0o644,
+                          'Contents/_CodeSignature/CodeResources': 0o644})
+        for rel in bundle:
+            self.assertEqual((runtime / BUNDLE / rel).read_bytes(), (self.bundle / rel).read_bytes(), rel)
+        subprocess.run(['/usr/bin/codesign', '--verify', '--strict', '--all-architectures', runtime / BUNDLE], check=True, capture_output=True)
+        self.args.output = self.root / 'again'
+        self.assertEqual(p.package(self.args)['sha256'], result['sha256'])
+
+    def test_seal_inputs_are_explicit_and_bound(self):
+        other = self.root / 'other-seal'
+        cases = [
+            ('seal without digest', lambda: setattr(self.args, 'signin_seal_sha256', None)),
+            ('digest without seal', lambda: setattr(self.args, 'signin_seal', None)),
+            ('wrong seal digest', lambda: setattr(self.args, 'signin_seal_sha256', '0' * 64)),
+            ('seal of another signature', lambda: (other.write_bytes(self.seal.read_bytes() + b'\n'),
+                                                   setattr(self.args, 'signin_seal', other), setattr(self.args, 'signin_seal_sha256', p.identity(other)['sha256']))),
+            ('unsigned helper with a seal', lambda: self.case.put('bin/omd-signin', macho())),
+            ('seal for another target', lambda: (self.case.other_platform('linux-x64'), setattr(self.args, 'signin_seal', self.seal),
+                                                 setattr(self.args, 'signin_seal_sha256', p.identity(self.seal)['sha256']))),
+        ]
+        for name, change in cases:
+            with self.subTest(name):
+                self.setUp()
+                change()
+                self.case.rejected()
 
 
 if __name__ == '__main__':

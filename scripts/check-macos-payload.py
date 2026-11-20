@@ -134,6 +134,28 @@ def packed_members(path, logical, arch):
     if not rows: raise ValueError('no packed native components')
     return rows, inventory
 
+def nested_bundles(app, rows, outer):
+    """Each nested application bundle (such as the sign-in window under the resources)
+    declares its own floor: it must cover the code inside it and must not exceed the
+    whole app's declared floor, so the helper launches wherever the app is offered."""
+    result = []
+    for info in sorted(app.rglob('*.app/Contents/Info.plist')):
+        root = info.parent.parent
+        if root == app or info.is_symlink() or not info.is_file(): continue
+        name = str(root.relative_to(app))
+        plist = plistlib.loads(info.read_bytes())
+        if not isinstance(plist, dict): raise ValueError(f'{name}: invalid nested Info.plist')
+        declared = plist.get('LSMinimumSystemVersion'); version(declared)
+        if 'LSMinimumSystemVersionByArchitecture' in plist:
+            raise ValueError(f'{name}: per-architecture plist override unsupported; require explicit policy')
+        executable = plist.get('CFBundleExecutable')
+        inside = [r for r in rows if r['path'].startswith(name + '/')]
+        if not isinstance(executable, str) or name + '/Contents/MacOS/' + executable not in [r['path'] for r in inside]:
+            raise ValueError(f'{name}: missing nested main executable')
+        floor = max((r['minimum'] for r in inside), key=version)
+        result.append({'path':name,'declared':declared,'required':floor,'pass':version(floor)<=version(declared)<=version(outer)})
+    return result
+
 def check(app, arch):
     plist = plistlib.loads((app/'Contents/Info.plist').read_bytes())
     declared = plist.get('LSMinimumSystemVersion'); version(declared)
@@ -156,9 +178,10 @@ def check(app, arch):
     main = 'Contents/MacOS/'+plist['CFBundleExecutable']
     if main not in [r['path'] for r in rows] or not packed: raise ValueError('missing main executable or packed yt-dlp')
     floor = max((r['minimum'] for r in rows), key=version)
+    bundles = nested_bundles(app, rows, declared)
     return {'schema':'omd-macos-payload-v1','app':str(app),'architecture':arch,'platform':'macOS',
-            'declared':declared,'required':floor,'pass':version(declared)>=version(floor),
-            'components':rows,'packed_inventory':packed,'files':files,
+            'declared':declared,'required':floor,'pass':version(declared)>=version(floor) and all(b['pass'] for b in bundles),
+            'components':rows,'nested_bundles':bundles,'packed_inventory':packed,'files':files,
             'limit':'Metadata lower bound only; no runtime, Intel-app, signing or release acceptance.'}
 
 def main():

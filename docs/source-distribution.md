@@ -64,6 +64,30 @@ outputs still containing mapped roots or the builder's home. It also checks the
 optimized worker marker. Development builds do not receive this public guarantee.
 The UI's scripts/build-public.mjs applies the same rule to its own executable.
 
+On macOS, `scripts/package-runtime.py` installs the sign-in window as the application
+bundle `bin/OMD Sign-In.app` instead of a bare `bin/omd-signin`. It holds the compiled
+helper at `Contents/MacOS/omd-signin`, a generated Info.plist (identifier
+`labs.northwolf.omd.signin`, name "OMD Sign-In", the engine version and the executable's
+own deployment minimum, sorted-key XML) and `Contents/Resources/AppIcon.icns`. The engine
+launches that executable directly, so the window gets its own bundle identity. The icon is
+an explicit packaging input, `--signin-icon FILE --signin-icon-sha256 HEX`: pass the
+desktop project's reviewed `src-tauri/icons/icon.icns`, which owns the product artwork. The
+engine source carries no artwork, and the archive is complete without a desktop checkout.
+Linux and Windows archives are unchanged and refuse an icon. Check an assembled tree,
+including the bundle's Info.plist and icon, against the same builder roots:
+
+```sh
+uv run scripts/build-public-engine.py --target aarch64-apple-darwin --scan /absolute/package/runtime/bin
+```
+
+A signed standalone runtime reuses the helper exactly as it was signed inside the app,
+where it was signed as the nested bundle. Its code directory then binds Info.plist and the
+bundle seal, so pass that seal as well: `--signin-seal <signed app>/…/bin/OMD Sign-In.app/Contents/_CodeSignature/CodeResources
+--signin-seal-sha256 HEX`. The packager copies it into the bundle, lists it in the runtime
+inventory and refuses a seal that the helper's code directories don't bind or that doesn't
+cover exactly the icon. Verify the assembled bundle with `codesign --verify --strict` before
+notarizing the archive.
+
 These checks don't rewrite literal strings or substitute for exact-byte materials,
 license review, signing/notarization, old-OS support, other CPU/platform execution or
 clean-account installation. Use the [materials contract](materials-contract.md),

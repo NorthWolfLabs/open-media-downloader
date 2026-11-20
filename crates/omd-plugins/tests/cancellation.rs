@@ -87,6 +87,7 @@ async fn cancel_and_dropped_invocations_return_all_execution_capacity() {
         page_size: 100,
         policy: SelectionPolicy::default(),
         now: String::new(),
+        collection_hint: None,
     };
     let stop = CancellationToken::new();
     let cancel = stop.clone();
@@ -200,6 +201,7 @@ async fn broker_wait_does_not_consume_plugin_execution_epochs_and_throttling_ext
         page_size: 100,
         policy: SelectionPolicy::default(),
         now: String::new(),
+        collection_hint: None,
     };
     let value = tokio::time::timeout(
         Duration::from_secs(120),

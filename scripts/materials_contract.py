@@ -9,6 +9,22 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 KINDS = ['notices', 'source', 'instructions', 'provenance']
+# macOS installs the native sign-in window as an application bundle beside the
+# engine, so the launched process has its own bundle identity. Every other engine
+# binary, and every binary on Linux and Windows, is a plain bin/ file.
+SIGN_IN_BINARY = 'omd-signin'
+SIGN_IN_BUNDLE = 'OMD Sign-In.app'
+SIGN_IN_EXECUTABLE = f'bin/{SIGN_IN_BUNDLE}/Contents/MacOS/{SIGN_IN_BINARY}'
+def macos(target): return isinstance(target, str) and (target.startswith('darwin-') or target.endswith('-apple-darwin'))
+def binary_path(name, target):
+    """Installed path of an engine binary relative to the runtime/resources root."""
+    if name == SIGN_IN_BINARY and macos(target): return SIGN_IN_EXECUTABLE
+    return 'bin/' + name + ('.exe' if isinstance(target, str) and (target.startswith('win32-') or 'windows' in target) else '')
+def binary_name(path):
+    """Receipt name of an installed engine binary path, or None for other files."""
+    if path == SIGN_IN_EXECUTABLE: return SIGN_IN_BINARY
+    rest = path[4:] if isinstance(path, str) and path.startswith('bin/') else ''
+    return rest if rest and '/' not in rest else None
 def sha(data): return hashlib.sha256(data).hexdigest()
 def portable(value):
     if not isinstance(value, str) or not value or value.startswith('/') or any(ord(c)<32 for c in value) or any(c in value for c in '\\:') or any(p in ('', '.', '..') or p.endswith((' ', '.')) for p in value.split('/')):
@@ -170,6 +186,5 @@ def validate_native_receipt(receipt, files, names, lock, target, notices, versio
             need(any(kinds[p]=='source-notice' and origins[p].get('archive')==crates[0] for p in source['materials']))
     need(set(tagged)<=ids and runtime_findings==1)
     artifacts = {x['name']: x['sha256'] for x in receipt.get('artifacts', [])}
-    suffix = '.exe' if 'windows' in target else ''
-    if len(artifacts) != len(receipt.get('artifacts', [])) or set(artifacts) != set(names) or any(files.get('bin/' + n + suffix) != artifacts[n] for n in names):
+    if len(artifacts) != len(receipt.get('artifacts', [])) or set(artifacts) != set(names) or any(files.get(binary_path(n, target)) != artifacts[n] for n in names):
         raise ValueError('Native receipt artifact mismatch')

@@ -726,6 +726,9 @@ pub struct ProviderManifest {
     pub version: String,
     pub description: String,
     pub source_hosts: Vec<String>,
+    /// The operations this source implements (such as `search`, `releases`
+    /// and `resolve`), plus `collection_hint` when its `resolve` reads the
+    /// request's `collection_hint`.
     pub capabilities: BTreeSet<String>,
     pub grants: Vec<HostGrant>,
     #[serde(default)]
@@ -786,6 +789,47 @@ pub struct ProviderRequest {
     pub page_size: u32,
     pub policy: SelectionPolicy,
     pub now: String,
+    /// Sent only to a source whose manifest declares the `collection_hint`
+    /// capability, and only on `resolve`, when the engine resolves a release
+    /// again for a download: the collection the release was listed under when
+    /// it was selected (for example a search-results or playlist collection),
+    /// or the collection of an approved plan being refreshed. A source that
+    /// files a release under more than one collection may return this
+    /// collection as the release's collection while the release still belongs
+    /// to it. The engine still requires the returned collection to match.
+    /// Absent otherwise: a source that does not declare the capability gets
+    /// requests without this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collection_hint: Option<SourceRef>,
+}
+
+/// The manifest capability a source declares to receive
+/// [`ProviderRequest::collection_hint`]. Unlike the other capabilities it names
+/// a request field, not an operation.
+pub const COLLECTION_HINT_CAPABILITY: &str = "collection_hint";
+
+impl ProviderManifest {
+    /// Whether this source asked for [`ProviderRequest::collection_hint`].
+    pub fn accepts_collection_hint(&self) -> bool {
+        self.capabilities.contains(COLLECTION_HINT_CAPABILITY)
+    }
+}
+
+impl ProviderRequest {
+    /// The request as this source receives it: without the collection hint
+    /// unless its manifest declares [`COLLECTION_HINT_CAPABILITY`], so a source
+    /// that validates requests against the schema it was built with gets
+    /// exactly the fields it knows.
+    pub fn for_source(&self, manifest: &ProviderManifest) -> std::borrow::Cow<'_, Self> {
+        if self.collection_hint.is_none() || manifest.accepts_collection_hint() {
+            std::borrow::Cow::Borrowed(self)
+        } else {
+            std::borrow::Cow::Owned(Self {
+                collection_hint: None,
+                ..self.clone()
+            })
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, ToSchema)]
@@ -1152,6 +1196,84 @@ mod tests {
         assert_eq!(path_segment("CON.txt", "item"), "_CON.txt");
         assert_eq!(path_segment("a/b:c?", "item"), "a_b_c_");
         assert!(path_segment(&"章".repeat(100), "item").len() <= 120);
+    }
+    /// Sources built before the collection hint existed receive exactly the
+    /// payload they always did unless the engine has a hint to give, and the
+    /// worker still accepts a request written without the field.
+    #[test]
+    fn the_collection_hint_is_optional_on_the_wire() {
+        let earlier = serde_json::json!({
+            "release_order": null, "discovery": null, "credential_profile": null,
+            "operation": "resolve",
+            "reference": {"provider": "org.example.source", "id": "item-1"},
+            "query": null, "url": null, "cursor": null, "page_size": 200,
+            "policy": SelectionPolicy::default(), "now": "2026-01-01T00:00:00Z"
+        });
+        let request: ProviderRequest = serde_json::from_value(earlier.clone()).unwrap();
+        assert_eq!(request.collection_hint, None);
+        assert_eq!(serde_json::to_value(&request).unwrap(), earlier);
+        let listed = SourceRef {
+            provider: "org.example.source".into(),
+            id: "results:demo".into(),
+        };
+        let hinted = ProviderRequest {
+            collection_hint: Some(listed.clone()),
+            ..request
+        };
+        let wire = serde_json::to_value(&hinted).unwrap();
+        assert_eq!(
+            wire["collection_hint"],
+            serde_json::to_value(&listed).unwrap()
+        );
+        let back: ProviderRequest = serde_json::from_value(wire).unwrap();
+        assert_eq!(back.collection_hint, Some(listed));
+    }
+    /// A source receives the hint only when its manifest asks for it; every
+    /// other source gets the exact bytes an earlier engine sent, so one that
+    /// validates its input against the earlier closed schema keeps working.
+    #[test]
+    fn only_a_source_that_declares_the_capability_receives_the_hint() {
+        let policy = serde_json::to_string(&SelectionPolicy::default()).unwrap();
+        let earlier = format!(
+            "{{\"release_order\":null,\"discovery\":null,\"credential_profile\":null,\
+             \"operation\":\"resolve\",\"reference\":{{\"provider\":\"org.example.source\",\
+             \"id\":\"item-1\"}},\"query\":null,\"url\":null,\"cursor\":null,\"page_size\":200,\
+             \"policy\":{policy},\"now\":\"2026-01-01T00:00:00Z\"}}"
+        );
+        let unhinted: ProviderRequest = serde_json::from_str(&earlier).unwrap();
+        let listed = SourceRef {
+            provider: "org.example.source".into(),
+            id: "results:demo".into(),
+        };
+        let hinted = ProviderRequest {
+            collection_hint: Some(listed.clone()),
+            ..unhinted.clone()
+        };
+        let mut manifest: ProviderManifest = serde_json::from_value(serde_json::json!({
+            "api": "omd:provider@2.0.0", "id": "org.example.source", "name": "Example",
+            "version": "1", "description": "Synthetic", "source_hosts": ["example.org"],
+            "capabilities": ["resolve"], "grants": []
+        }))
+        .unwrap();
+        assert!(!manifest.accepts_collection_hint());
+        for request in [&unhinted, &hinted] {
+            let sent = serde_json::to_string(&request.for_source(&manifest)).unwrap();
+            assert_eq!(sent, earlier);
+        }
+        manifest
+            .capabilities
+            .insert(COLLECTION_HINT_CAPABILITY.into());
+        assert!(manifest.accepts_collection_hint());
+        assert_eq!(
+            serde_json::to_string(&unhinted.for_source(&manifest)).unwrap(),
+            earlier
+        );
+        let sent: serde_json::Value =
+            serde_json::to_value(hinted.for_source(&manifest).as_ref()).unwrap();
+        assert_eq!(
+            sent["collection_hint"],
+            serde_json::to_value(&listed).unwrap()
+        );
     }
     #[test]
     fn identity_is_namespaced() {

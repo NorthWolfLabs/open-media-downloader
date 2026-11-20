@@ -458,6 +458,16 @@
         ],
         "type": "object"
       },
+      "AttachQuery": {
+        "properties": {
+          "finish_downloads": {
+            "default": false,
+            "description": "When this client is the last to leave and background operation is off,\nkeep the engine running until no download is queued or running, then\nstop. Without it, the engine stops soon after the last client leaves and\nunfinished downloads continue at its next start. Command-line and agent\nclients that submit work and leave set it; an interactive application\nwhose window close should stop downloads leaves it unset.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "Availability": {
         "enum": [
           "available",
@@ -730,6 +740,13 @@
       },
       "ClientLease": {
         "properties": {
+          "finish_downloads": {
+            "description": "Whether the engine recorded `finish_downloads` for this client. Absent\non engines released before that attach option.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "heartbeat_seconds": {
             "format": "uint32",
             "minimum": 0,
@@ -3658,6 +3675,7 @@
             "type": "boolean"
           },
           "capabilities": {
+            "description": "The operations this source implements (such as `search`, `releases`\nand `resolve`), plus `collection_hint` when its `resolve` reads the\nrequest's `collection_hint`.",
             "items": {
               "type": "string"
             },
@@ -5934,7 +5952,18 @@
     "/v2/clients": {
       "post": {
         "operationId": "attachClient",
-        "parameters": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "finish_downloads",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "When this client is the last to leave and background operation is off,\nkeep the engine running until no download is queued or running, then\nstop. Without it, the engine stops soon after the last client leaves and\nunfinished downloads continue at its next start. Command-line and agent\nclients that submit work and leave set it; an interactive application\nwhose window close should stop downloads leaves it unset.",
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

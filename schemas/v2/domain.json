@@ -1419,6 +1419,7 @@
           "default": false
         },
         "capabilities": {
+          "description": "The operations this source implements (such as `search`, `releases`\nand `resolve`), plus `collection_hint` when its `resolve` reads the\nrequest's `collection_hint`.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1480,6 +1481,17 @@
     "ProviderRequest": {
       "type": "object",
       "properties": {
+        "collection_hint": {
+          "description": "Sent only to a source whose manifest declares the `collection_hint`\ncapability, and only on `resolve`, when the engine resolves a release\nagain for a download: the collection the release was listed under when\nit was selected (for example a search-results or playlist collection),\nor the collection of an approved plan being refreshed. A source that\nfiles a release under more than one collection may return this\ncollection as the release's collection while the release still belongs\nto it. The engine still requires the returned collection to match.\nAbsent otherwise: a source that does not declare the capability gets\nrequests without this field.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SourceRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "credential_profile": {
           "type": [
             "string",

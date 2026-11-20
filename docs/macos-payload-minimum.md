@@ -20,6 +20,10 @@ retain all member hashes and all architecture metadata, but calculate the floor
 only for the selected macOS CPU. ARM64 requires a general arm64 slice, not only
 arm64e. Missing native architecture/platform/deployment metadata fails closed.
 Per-architecture plist floors are currently rejected, requiring policy review.
+A nested application bundle (the engine's `OMD Sign-In.app` under the resources)
+declares its own floor. That floor must cover the code inside the bundle and must not
+exceed the app's declared floor, so the helper launches wherever the app is offered.
+The report lists each one under `nested_bundles`, and any failure fails the gate.
 Unknown future archive formats need an explicit inspector before acceptance.
 
 Run the gate after bundling and before accepting/signing a release candidate;

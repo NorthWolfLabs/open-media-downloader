@@ -1,6 +1,6 @@
 # Controlled-source yt-dlp prototype (macOS arm64)
 
-This profile builds yt-dlp 2026.08.19 as a PyInstaller onefile whose shipped Python
+This profile builds yt-dlp 2026.10.26 as a PyInstaller onefile whose shipped Python
 runtime, native libraries, Python packages and bootloader all come from pinned source
 archives. Each input's version, hash, build flags and patch set is recorded, so the
 build has its own provenance receipt. It replaces
@@ -40,7 +40,7 @@ SHA-256, with its role:
   189 npm tarballs that yt-dlp-ejs's own `package-lock.json` pins by sha512.
 
 Runtime and packaging sdists must equal the legacy `distribution/yt-dlp/uv.lock`
-entries exactly (`yt-dlp[default]==2026.8.19`, Python `==3.13.*`, `.python-version`
+entries exactly (`yt-dlp[default]==2026.10.26`, Python `==3.13.*`, `.python-version`
 3.13.14). The only declared adjustment is PyInstaller 6.22.2 → 6.22.0, the version the
 reviewed signing and extractor helpers pin. Its darwin dependency set is unchanged. The
 optional `curl-cffi` extra is not part of `[default]`, so it is not built.

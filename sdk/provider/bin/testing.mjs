@@ -20,6 +20,8 @@ export async function harness(project,{worker=process.env.OMD_PLUGIN_WORKER??'om
   const manifest=JSON.parse(await readFile(join(project,'omd-plugin.json'),'utf8'));
   return {
     async invoke(input,broker=()=>{throw new Error('Unexpected broker operation')}) {
+      // The engine sends collection_hint only to a source whose manifest declares it.
+      assert.ok(input?.collection_hint==null||(manifest.capabilities??[]).includes('collection_hint'),'Declare the collection_hint capability in omd-plugin.json before a fixture sets input.collection_hint; the engine never sends it otherwise');
       const {child,stop}=ownedProcess(worker,[],{env:{}});
       let buffered=Buffer.alloc(0),settled=false;let frames=Promise.resolve();
       const trace=[];

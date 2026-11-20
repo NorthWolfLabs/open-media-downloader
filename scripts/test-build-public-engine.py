@@ -103,6 +103,47 @@ class Remap(unittest.TestCase):
         self.assertEqual(b.leaks(data, entries, '/Users/someone'), [{'host': '/c/cargo home', 'count': 2}, {'host': '/Users/someone', 'count': 1}])
         self.assertEqual(b.leaks(b'/cargo/registry/b.rs /omd/engine/crates/x.rs', entries, '/Users/someone'), [])
 
+    def test_scan_covers_every_file_of_an_assembled_runtime_tree(self):
+        entries = [{'role': 'engine', 'host': '/b/engine', 'logical': '/omd/engine'}]
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'bin'
+            bundle = root / 'OMD Sign-In.app/Contents'
+            for rel, data in (('omd-engine', b'/omd/engine/crates/x.rs'), ('OMD Sign-In.app/Contents/MacOS/omd-signin', b'clean'),
+                              ('OMD Sign-In.app/Contents/Info.plist', b'<string>/b/engine/x</string>'), ('OMD Sign-In.app/Contents/Resources/AppIcon.icns', b'icns /Users/someone')):
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                (root / rel).write_bytes(data)
+            self.assertEqual(b.scan(root, entries, '/Users/someone'), (4, {'OMD Sign-In.app/Contents/Info.plist': [{'host': '/b/engine', 'count': 1}],
+                                                                          'OMD Sign-In.app/Contents/Resources/AppIcon.icns': [{'host': '/Users/someone', 'count': 1}]}))
+            self.assertEqual(b.scan(root, entries, '/Users/other')[1], {'OMD Sign-In.app/Contents/Info.plist': [{'host': '/b/engine', 'count': 1}]})
+            (bundle / 'Resources/link').symlink_to(root / 'omd-engine')
+            with self.assertRaisesRegex(ValueError, 'symbolic link'):
+                b.scan(root, entries, '/Users/other')
+
+    def test_scan_refuses_an_unlisted_directory_and_an_empty_tree(self):
+        # os.walk skips a directory it cannot list unless told otherwise; an unscanned
+        # file must never pass as clean, and neither may a tree with nothing in it.
+        entries = [{'role': 'engine', 'host': '/b/engine', 'logical': '/omd/engine'}]
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / 'bin'
+            (root / 'empty/nested').mkdir(parents=True)
+            with self.assertRaisesRegex(ValueError, 'contains no files to scan'):
+                b.scan(root, entries, '/Users/other')
+            with mock.patch.object(b.os, 'walk', side_effect=lambda top, onerror: onerror(PermissionError(13, 'Permission denied', str(root / 'locked')))):
+                with self.assertRaisesRegex(ValueError, 'Cannot list .*locked in the scanned tree: Permission denied'):
+                    b.scan(root, entries, '/Users/other')
+            (root / 'omd-engine').write_bytes(b'clean')
+            locked = root / 'locked'
+            locked.mkdir()
+            (locked / 'omd-signin').write_bytes(b'/b/engine')
+            if os.name == 'posix' and os.geteuid() != 0:
+                locked.chmod(0)
+                try:
+                    with self.assertRaisesRegex(ValueError, 'Cannot list .*locked in the scanned tree'):
+                        b.scan(root, entries, '/Users/other')
+                finally:
+                    locked.chmod(0o700)
+            self.assertEqual(b.scan(root, entries, '/Users/other'), (2, {'locked/omd-signin': [{'host': '/b/engine', 'count': 1}]}))
+
 
 class Entry(unittest.TestCase):
     """The command-line entry, run from a copy of the script in a scratch engine root."""
@@ -120,6 +161,23 @@ class Entry(unittest.TestCase):
     def run_entry(self, *args, **env):
         return subprocess.run([sys.executable, '-I', str(self.root / 'scripts/build-public-engine.py'), *args], cwd=self.root,
                               env={**self.env, **env}, capture_output=True, text=True)
+
+    def test_scan_entry_checks_an_assembled_tree_for_this_plan_roots(self):
+        tree = self.root.parent / 'runtime bin'
+        (tree / 'OMD Sign-In.app/Contents').mkdir(parents=True)
+        (tree / 'OMD Sign-In.app/Contents/Info.plist').write_bytes(b'<plist/>')
+        result = self.run_entry('--target', 'aarch64-apple-darwin', '--scan', str(tree))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual((report['status'], report['scanned_files'], report['builder_paths'], report['release_accepted']), ('scanned', 1, 0, False))
+        (tree / 'OMD Sign-In.app/Contents/Info.plist').write_bytes(str(self.root / 'cargo home').encode())
+        result = self.run_entry('--target', 'aarch64-apple-darwin', '--scan', str(tree))
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('still contains builder paths', result.stderr)
+        self.assertIn('OMD Sign-In.app/Contents/Info.plist', result.stderr)
+        result = self.run_entry('--target', 'aarch64-apple-darwin', '--scan', str(tree), '--check')
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('--scan takes only --target', result.stderr)
 
     def test_check_reports_the_plan_and_refuses_overrides_without_building(self):
         result = self.run_entry('--target', 'aarch64-apple-darwin', '--check')

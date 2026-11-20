@@ -32,6 +32,9 @@ jobs:
           node-version: 24.20.0
           run-install: false
       - uses: astral-sh/setup-uv@6b9c6063abd6010835644d4c2e1bef4cf5cd0fca # v6.0.1
+      - name: Install Linux sign-in window prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev
       - name: Install locked provider SDK dependencies
         working-directory: sdk/provider
         run: vp install --frozen-lockfile

@@ -84,7 +84,8 @@ SIGNING_FIELDS = ('mode', 'team_id', 'purpose', 'materials_binding', 'status', '
 RECEIPT_FIELDS = ('receipt', 'notices', 'binaries', 'artifacts', 'lock_sha256', 'target', 'version', 'findings', 'spans', 'spans_in_payload', 'pending', 'release_accepted')
 COMPONENT_FIELDS = ('id', 'version', 'basis', 'initial_component', 'status', 'pending', 'artifacts', 'materials')
 METHODS = {'signature-only': 'paired-structure', 'prepared-extractor': EXTRACTOR_METHOD, 'managed-manifest': 'digest-fields-only',
-           'build-inventory': 'digests-and-signing-record', 'engine-receipt': 'artifact-only-rebinding', 'outer-seal': 'code-resources-hash2'}
+           'build-inventory': 'digests-and-signing-record', 'engine-receipt': 'artifact-only-rebinding', 'outer-seal': 'code-resources-hash2',
+           'nested-seal': 'code-resources-hash2'}
 RELATION_FIELDS = {
     'identical': {'kind', 'before', 'after'},
     'signature-only': {'kind', 'before', 'after', 'method', 'layout', 'signature_independent_sha256'},
@@ -93,7 +94,35 @@ RELATION_FIELDS = {
     'build-inventory': {'kind', 'before', 'after', 'method'},
     'engine-receipt': {'kind', 'before', 'after', 'method'},
     'outer-seal': {'kind', 'before', 'after', 'method', 'sealed_files'},
+    'nested-seal': {'kind', 'before', 'after', 'method', 'sealed_files'},
 }
+# A nested application bundle under the resources (the macOS sign-in window): its main
+# executable is a code object, and signing adds exactly its Contents/_CodeSignature seal.
+NESTED_CODE = re.compile(r'(.+\.app)/Contents/MacOS/[A-Za-z0-9._-]{1,128}')
+NESTED_SEAL = '/Contents/_CodeSignature/CodeResources'
+
+
+def nested_bundles(code, res):
+    """{bundle root: main executable} for code objects inside a nested .app under the resources."""
+    found = {}
+    for path in code:
+        match = NESTED_CODE.fullmatch(path) if path.startswith(res + '/') else None
+        if match:
+            found[match[1]] = path
+    return found
+
+
+def engine_binaries(code, res):
+    """{receipt name: payload path} of the engine binaries among a layout's code paths.
+    A binding is checked against the layout it recorded, not the current one: an
+    earlier macOS layout installed the sign-in window as a bare bin/omd-signin."""
+    found = {}
+    for path in sorted(code):
+        if path.startswith(res + '/bin/'):
+            name = materials_contract.binary_name(path[len(res) + 1:])
+            need(name is not None and name not in found, 'Invalid final payload layout')
+            found[name] = path
+    return found
 # omd-final-materials-v2: every v1 field plus the typed extractor route; the prepared-extractor
 # relation gains a route label that must pair with its method.
 TOP_V2 = (*TOP[:TOP.index('receipts')], 'extractor', *TOP[TOP.index('receipts'):])
@@ -219,13 +248,17 @@ def validate_final(doc, initial_bytes, payload, delivery, expect):
     need(doc['payload']['files'] == payload, 'Final payload differs from the bound payload inventory')
     need(doc['delivery']['files'] == delivery, 'Delivery set differs from the bound delivery inventory')
     before, after, shipped = doc['input']['files'], doc['payload']['files'], doc['delivery']['files']
+    bundles = nested_bundles(code, res)
+    seals = {root + NESTED_SEAL: root for root in bundles}
     need(set(before) <= set(after), 'Unexpected removal of an input file')
-    need(set(after) - set(before) <= {SEAL}, 'Unexpected new payload file')
+    need(set(after) - set(before) <= {SEAL} | set(seals), 'Unexpected new payload file')
     need(INFO in after and SEAL in after and all(p in after for p in code) and all(p.startswith('Contents/') for p in after), 'Invalid final payload layout')
+    need(all(p in after and p not in before for p in seals), 'A nested bundle is not freshly sealed')
     relations = doc['relations']
     need(isinstance(relations, dict) and set(relations) == set(after), 'Relations must cover exactly the final payload')
     fixed = {res + '/tools/tools-v2.json': 'managed-manifest', res + '/browser/browser-tools-v2.json': 'managed-manifest',
-             res + '/build-inventory.json': 'build-inventory', res + '/third-party/native-receipt.json': 'engine-receipt', SEAL: 'outer-seal'}
+             res + '/build-inventory.json': 'build-inventory', res + '/third-party/native-receipt.json': 'engine-receipt', SEAL: 'outer-seal',
+             **dict.fromkeys(seals, 'nested-seal')}
     fields = RELATION_FIELDS_V2 if v2 else RELATION_FIELDS
     for path, r in relations.items():
         kind = ('prepared-extractor' if code[path] == 'yt-dlp' else 'signature-only') if path in code else fixed.get(path, 'identical')
@@ -240,7 +273,7 @@ def validate_final(doc, initial_bytes, payload, delivery, expect):
             method = isinstance(r['method'], str) and r['method'] in EXTRACTOR_ROUTES and EXTRACTOR_ROUTES[r['method']] == r['route']
         else:
             method = r['method'] == METHODS[kind]
-        need(method and (r['before'] is not None or kind == 'outer-seal'), 'Unexpected relation for ' + path)
+        need(method and (r['before'] is not None or kind in ('outer-seal', 'nested-seal')), 'Unexpected relation for ' + path)
         if path in code:
             need(r['before'] != r['after'], 'Code object was not re-signed: ' + path)
             need(hexdigest(r['signature_independent_sha256']), 'Unexpected relation for ' + path)
@@ -252,6 +285,10 @@ def validate_final(doc, initial_bytes, payload, delivery, expect):
                      'Unexpected relation for ' + path)
         if kind == 'outer-seal':
             need(type(r['sealed_files']) is int and r['sealed_files'] == len(after) - 3, 'Unexpected relation for ' + path)
+        if kind == 'nested-seal':
+            root = seals[path]
+            inside = [p for p in after if p.startswith(root + '/') and p not in (root + '/' + INFO, bundles[root], path)]
+            need(r['before'] is None and type(r['sealed_files']) is int and r['sealed_files'] == len(inside), 'Unexpected relation for ' + path)
     if v2:
         # The typed extractor route: it must restate the relation it explains, and the stock
         # and controlled-source routes can never carry each other's proof.
@@ -301,7 +338,8 @@ def validate_final(doc, initial_bytes, payload, delivery, expect):
     receipts = doc['receipts']
     need(keys(receipts, ('engine', 'desktop')) and receipts['engine'] is not None and receipts['desktop'] is not None, 'Missing final native receipt binding')
     triple = TRIPLES[doc['target']]
-    binaries = sorted(p[len(res) + 5:] for p in code if p.startswith(res + '/bin/'))
+    engine_paths = engine_binaries(code, res)
+    binaries = sorted(engine_paths)
 
     def bound(r, names, artifacts, lock):
         return (keys(r, RECEIPT_FIELDS) and r['binaries'] == names and r['artifacts'] == artifacts and isinstance(lock, str) and r['lock_sha256'] == lock
@@ -309,7 +347,7 @@ def validate_final(doc, initial_bytes, payload, delivery, expect):
                 and type(r['spans']) is int and r['spans'] > 0 and r['spans_in_payload'] == r['spans'] and r['pending'] == [] and r['release_accepted'] is False)
     engine, receipt_path, notices_path = receipts['engine'], res + '/third-party/native-receipt.json', res + '/third-party/native-NOTICES.txt'
     need(bool(binaries) and receipt_path in after and notices_path in after
-         and bound(engine, binaries, {n: after[res + '/bin/' + n]['sha256'] for n in binaries}, doc['locks'].get('Cargo.lock'))
+         and bound(engine, binaries, {n: after[p]['sha256'] for n, p in engine_paths.items()}, doc['locks'].get('Cargo.lock'))
          and engine['receipt'] == {'path': receipt_path, 'sha256': after[receipt_path]['sha256']}
          and engine['notices'] == {'path': notices_path, 'sha256': after[notices_path]['sha256']},
          'Engine receipt does not bind the final payload')
@@ -419,9 +457,7 @@ def code_directories(data):
 
 
 def expected_identifier(role, path, bundle_id):
-    if role['sign'] == 'outer-bundle':
-        return bundle_id
-    return f"{bundle_id}.{role['id']}" + ('.' + path.rsplit('/', 1)[-1].removesuffix('.dylib') if role['id'] == 'browser-library' else '')
+    return _signing().role_identifier(role, path, bundle_id)
 
 
 def check_signature(path, role, data, mode, team, identifier):
@@ -430,7 +466,7 @@ def check_signature(path, role, data, mode, team, identifier):
     for image in _signing().signature(data):
         need(image['signed'] and image['identifier'] == identifier, f'{path}: unexpected signing identifier')
         need(image['adhoc'] is not developer and image['certificates'] is developer and image['team'] == team, f'{path}: signature mode/team mismatch')
-        need(image['runtime'] is (role['filetype'] == 'execute') and not image['linker_signed'], f'{path}: hardened runtime flag mismatch')
+        need(image['runtime'] is _signing().hardened(role) and not image['linker_signed'], f'{path}: hardened runtime flag mismatch')
         need((image['entitlements'] or {}) == role['entitlements'], f'{path}: entitlements differ from the reviewed role')
 
 
@@ -603,7 +639,9 @@ class Derivation:
         exe, bundle_id, version = info['CFBundleExecutable'], info['CFBundleIdentifier'], info.get('CFBundleShortVersionString')
         need(isinstance(version, str) and version, 'Final Info.plist lacks a version')
         shell = 'Contents/MacOS/' + exe
-        roles = {signing.expand(r['path'], res, exe): r for r in policy['roles']}
+        roles = signing.role_paths(policy, res, exe)
+        self.engine_paths = engine_binaries(roles, res)
+        self.seals = {signing.bundle_root(r, p) + NESTED_SEAL: (p, r) for p, r in roles.items() if r['filetype'] == 'app-bundle'}
         for label, heads in (('input', in_heads), ('final', fin_heads)):
             for path, head in heads.items():
                 need(not signing.is_macho(head) or path in roles, f'Unrecognized code in the {label} payload: {path}')
@@ -631,7 +669,8 @@ class Derivation:
         # Relations, file by file.
         relations, comparisons = {}, {}
         need(set(before) <= set(after), 'Unexpected removal of input files: ' + ', '.join(sorted(set(before) - set(after))[:5]))
-        need(set(after) - set(before) <= {SEAL}, 'Unexpected new payload files: ' + ', '.join(sorted(set(after) - set(before) - {SEAL})[:5]))
+        need(set(after) - set(before) <= {SEAL} | set(self.seals), 'Unexpected new payload files: ' + ', '.join(sorted(set(after) - set(before) - {SEAL} - set(self.seals))[:5]))
+        need(all(p in after and p not in before for p in self.seals), 'A nested bundle is not freshly sealed: ' + ', '.join(sorted(self.seals)))
         transforms = {res + '/tools/tools-v2.json': self.manifest, res + '/browser/browser-tools-v2.json': self.manifest,
                       res + '/build-inventory.json': self.inventory, res + '/third-party/native-receipt.json': self.receipt}
         self.record = None
@@ -639,6 +678,8 @@ class Derivation:
             b, a = before.get(path), after[path]
             if path == SEAL:
                 relations[path] = self.seal(fin_files, b, a, exe)
+            elif path in self.seals:
+                relations[path] = self.nested_seal(path, a)
             elif path in roles:
                 relations[path], comparisons[path] = self.code(path, roles[path], in_files[path], fin_files[path], bundle_id, mode, team)
             elif path in transforms:
@@ -653,7 +694,7 @@ class Derivation:
              'The sealed signing record disagrees with the signing plan')
         crypto = None
         if spec.get('cryptographic', True):
-            crypto = cryptographic(final_app, sorted(roles), mode, team, spec.get('temp_root'))
+            crypto = cryptographic(final_app, sorted(roles) + sorted(p[:-len(NESTED_SEAL)] for p in self.seals), mode, team, spec.get('temp_root'))
         else:
             self.gap('signature-binding', 'cryptographic codesign verification was not requested; only static signature checks ran')
         self.facts.update(relation_counts={k: sum(r['kind'] == k for r in relations.values()) for k in sorted({r['kind'] for r in relations.values()})},
@@ -665,8 +706,8 @@ class Derivation:
         arch = {'arm64': 'arm64', 'x86_64': 'x64'}.get(inventory_in.get('arch'))
         need(arch is not None and inventory_in.get('platform') == 'darwin', 'Unsupported final payload platform')
         target = 'darwin-' + arch
-        engine = sorted(p[len(res) + 5:] for p in roles if p.startswith(res + '/bin/'))
-        required = {n: {'version': version, 'prefix': 'bin/' + n} for n in engine}
+        engine = sorted(self.engine_paths)
+        required = {n: {'version': version, 'prefix': p[len(res) + 1:]} for n, p in self.engine_paths.items()}
         for name in ('yt_dlp', 'ffmpeg', 'ffprobe', 'node'):
             required[name] = {'version': tools_in[name]['version'], 'prefix': 'tools/' + name + '/'}
         required['browser'] = {'version': browser_in['version'], 'prefix': 'browser/content/'}
@@ -824,12 +865,13 @@ class Derivation:
         body = {k: v for k, v in new.items() if k != 'signing'}
         expected = copy.deepcopy(old)
         try:
+            # The signer appends each new nested bundle seal, in sorted order, after the staged rows.
             expected['files'] = [{'path': row['path'], 'sha256': after[res + '/' + row['path']]['sha256'], 'size': after[res + '/' + row['path']]['bytes']}
-                                 for row in old['files']]
+                                 for row in [*old['files'], *({'path': p[len(res) + 1:]} for p in sorted(self.seals))]]
         except (KeyError, TypeError) as error:
             raise ValueError(f'{path}: lists a file outside the final payload: {error}') from error
         need(body == expected, f'{path}: changed beyond its digests and signing record')
-        need({row['path'] for row in old['files']} == {p[len(res) + 1:] for p in after if p.startswith(res + '/')} - {'build-inventory.json'},
+        need({row['path'] for row in old['files']} | {p[len(res) + 1:] for p in self.seals} == {p[len(res) + 1:] for p in after if p.startswith(res + '/')} - {'build-inventory.json'},
              f'{path}: does not inventory exactly the final resources')
         need(set(record) - {'materials_binding'} == {'schema', 'mode', 'purpose', 'payload_digests', 'source_build_inventory_sha256', 'engine_receipt', 'release_accepted'}
              and record['schema'] == signing.INVENTORY_SIGNING_SCHEMA and record['payload_digests'] == 'post-signature'
@@ -848,10 +890,19 @@ class Derivation:
             return {**{k: v for k, v in r.items() if k != 'artifacts'}, 'review': {k: v for k, v in r['review'].items() if k != 'input_sha256'}}
         need(strip(old) == strip(new), f'{path}: changed beyond its artifact-only rebinding')
         old_bound = {x.get('name'): x.get('sha256') for x in old['artifacts']}
-        need(old_bound == {n: before.get(res + '/bin/' + n, {}).get('sha256') for n in old_bound}, f'{path}: the input receipt did not bind the pre-signature engine binaries')
+        need(old_bound == {n: before.get(self.engine_paths.get(n, ''), {}).get('sha256') for n in old_bound}, f'{path}: the input receipt did not bind the pre-signature engine binaries')
         need({x.get('name'): {'bytes': x.get('bytes'), 'sha256': x.get('sha256')} for x in new['artifacts']}
-             == {n: after.get(res + '/bin/' + n) for n in old_bound}, f'{path}: the final receipt does not bind the signed engine binaries')
+             == {n: after.get(self.engine_paths.get(n, '')) for n in old_bound}, f'{path}: the final receipt does not bind the signed engine binaries')
         return {'kind': 'engine-receipt', 'before': sha(before_bytes), 'after': sha(after_bytes), 'method': METHODS['engine-receipt']}
+
+    def nested_seal(self, path, after):
+        """A nested bundle's new seal: it covers exactly the bundle resources and the main
+        executable's code directory binds it and the nested Info.plist (re-derived from bytes)."""
+        executable, role = self.seals[path]
+        root = self.final_app / path[:-len(NESTED_SEAL)]
+        proof = _signing().nested_seal(root, role['bundle'])
+        need(proof['sha256'] == after['sha256'], f'{path}: the nested seal changed during the binding')
+        return {'kind': 'nested-seal', 'before': None, 'after': after['sha256'], 'method': METHODS['nested-seal'], 'sealed_files': proof['sealed_files']}
 
     def seal(self, files, before, after, exe):
         data = files[SEAL].read_bytes()
@@ -895,7 +946,7 @@ class Derivation:
         spans = sum(len(p['texts']) for p in receipt['packages']) + len(receipt['runtime_materials'])
         return {'receipt': {'path': res + '/third-party/native-receipt.json', 'sha256': self.after[res + '/third-party/native-receipt.json']['sha256']},
                 'notices': {'path': res + '/third-party/native-NOTICES.txt', 'sha256': sha(notices)}, 'binaries': engine,
-                'artifacts': {n: self.after[res + '/bin/' + n]['sha256'] for n in engine}, 'lock_sha256': lock, 'target': TRIPLES[target],
+                'artifacts': {n: self.after[self.engine_paths[n]]['sha256'] for n in engine}, 'lock_sha256': lock, 'target': TRIPLES[target],
                 'version': version, 'findings': len(receipt['review']['findings']), 'spans': spans, 'spans_in_payload': spans, 'pending': [], 'release_accepted': False}
 
     def desktop_receipt(self, spec, exe, executable, locks, target, version, resources):

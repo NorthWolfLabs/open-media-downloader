@@ -6,6 +6,10 @@
       "destination": ".agents/skills/omd-plugin-authoring/SKILL.md"
     },
     {
+      "source": ".gitattributes",
+      "destination": ".gitattributes"
+    },
+    {
       "source": ".github/workflows/ci.yml",
       "destination": ".github/workflows/ci.yml"
     },
@@ -456,6 +460,10 @@
     {
       "source": "crates/omd-service/tests/native_sign_in.rs",
       "destination": "crates/omd-service/tests/native_sign_in.rs"
+    },
+    {
+      "source": "crates/omd-service/tests/plugin_budget_log.rs",
+      "destination": "crates/omd-service/tests/plugin_budget_log.rs"
     },
     {
       "source": "crates/omd-signin/Cargo.toml",
@@ -936,6 +944,10 @@
     {
       "source": "scripts/sign-macos.py",
       "destination": "scripts/sign-macos.py"
+    },
+    {
+      "source": "scripts/signin_bundle.py",
+      "destination": "scripts/signin_bundle.py"
     },
     {
       "source": "scripts/smoke-runtime.py",

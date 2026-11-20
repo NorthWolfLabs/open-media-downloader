@@ -27,7 +27,7 @@ as your ordinary user. Profiles and downloads belong outside /opt/omd-engine.
 set -eu
 test ! -e /opt/omd-engine
 sudo install -d -m 0755 /opt/omd-engine
-sudo tar --extract --gzip --file OMD-Engine-0.2.1-linux-x64.tar.gz \
+sudo tar --extract --gzip --file OMD-Engine-0.2.3-linux-x64.tar.gz \
   --directory /opt/omd-engine --no-same-owner
 sudo chown -R root:root /opt/omd-engine
 sudo install -m 0644 omd-v2-engine.apparmor /etc/apparmor.d/omd-v2-engine
@@ -35,6 +35,12 @@ sudo apparmor_parser --replace /etc/apparmor.d/omd-v2-engine
 /opt/omd-engine/start-engine.sh --profile "$HOME/.local/share/omd-engine"
 )
 ```
+
+With background operation off (the default), the engine started this way stops
+about a minute after its last client leaves. CLI commands hold a client only
+while they run, but they ask the engine to finish their downloads: a queued or
+running download keeps it up until the queue is empty, so `start-engine.sh` plus
+`omd` is enough for a one-off download.
 
 The initial test must succeed before running the following commands; stop if the
 installation directory already exists. The policy authorizes namespace creation

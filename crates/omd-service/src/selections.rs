@@ -228,6 +228,9 @@ async fn step(app: &App, task: &SelectionTask, token: &CancellationToken) -> Res
                 page_size: 1,
                 policy: request.policy,
                 now: omd_store::now(),
+                // Each post is frozen at its own item identity; nothing was
+                // listed yet, so there is no collection to hint.
+                collection_hint: None,
             };
             let resolved: ResolvedRelease = app.runtime.invoke(&source, &input, token).await?;
             if resolved.release.reference != *reference
@@ -240,6 +243,7 @@ async fn step(app: &App, task: &SelectionTask, token: &CancellationToken) -> Res
                     .and_then(|s| s.image.as_ref())
                     .is_none_or(|i| i.release_id != reference.id)
             {
+                forget_stale_enumerations(app, &[&request.reference]).await;
                 return Err(problem(
                     StatusCode::CONFLICT,
                     "selection_changed",
@@ -271,6 +275,7 @@ async fn step(app: &App, task: &SelectionTask, token: &CancellationToken) -> Res
                 page_size: 200,
                 policy: request.policy.clone(),
                 now: omd_store::now(),
+                collection_hint: None,
             };
             let page: Page<Collection> = app.runtime.invoke(&source, &input, token).await?;
             let mut entries = Vec::with_capacity(page.items.len());
@@ -324,6 +329,7 @@ async fn step(app: &App, task: &SelectionTask, token: &CancellationToken) -> Res
                 ..Default::default()
             },
             now: omd_store::now(),
+            collection_hint: None,
         };
         let page: Page<Release> = app.runtime.invoke(&source, &input, token).await?;
         if page.items.iter().any(|r| r.collection != request.reference) {
@@ -354,6 +360,10 @@ async fn step(app: &App, task: &SelectionTask, token: &CancellationToken) -> Res
             page_size: 200,
             policy: request.policy.clone(),
             now: omd_store::now(),
+            // The collection this release was listed under. A source that files
+            // the release under several collections can keep it there; the
+            // check below still requires exactly this collection back.
+            collection_hint: Some(release.collection.clone()),
         };
         let resolved: ResolvedRelease = app.runtime.invoke(&source, &input, token).await?;
         let actual = &resolved.release;
@@ -365,6 +375,7 @@ async fn step(app: &App, task: &SelectionTask, token: &CancellationToken) -> Res
             || actual.chapter != release.chapter
             || !request.policy.accepts(actual)
         {
+            forget_stale_enumerations(app, &[&scan.reference, &release.collection]).await;
             return Err(problem(
                 StatusCode::CONFLICT,
                 "selection_changed",

@@ -54,11 +54,26 @@ pub struct AccountSaved {
 pub struct AccountRevoked {
     pub revoked: bool,
 }
+// Unknown parameters are ignored, as they were before this query existed.
+#[derive(Default, Serialize, Deserialize, JsonSchema)]
+pub struct AttachQuery {
+    /// When this client is the last to leave and background operation is off,
+    /// keep the engine running until no download is queued or running, then
+    /// stop. Without it, the engine stops soon after the last client leaves and
+    /// unfinished downloads continue at its next start. Command-line and agent
+    /// clients that submit work and leave set it; an interactive application
+    /// whose window close should stop downloads leaves it unset.
+    #[serde(default)]
+    pub finish_downloads: bool,
+}
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ClientLease {
     pub id: String,
     pub heartbeat_seconds: u32,
     pub lease_seconds: u32,
+    /// Whether the engine recorded `finish_downloads` for this client. Absent
+    /// on engines released before that attach option.
+    pub finish_downloads: Option<bool>,
 }
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ClientHeartbeat {
@@ -235,6 +250,8 @@ impl SourceInvocation {
             policy: self.policy,
             credential_profile: self.credential_profile,
             now: omd_store::now(),
+            // Engine-owned: set only when the engine resolves a listed release again.
+            collection_hint: None,
         }
     }
 }

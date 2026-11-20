@@ -32,6 +32,12 @@ before saving it: it copies the audio packets unchanged into a new file and writ
 back only:
 - the source's title, artist, album, album artist, composer, genre, date, track,
   disc and copyright tags, when each is plain text of at most 1024 bytes;
+- only where the source has no usable title, artist or date tag: the title from
+  the release title, the artist from the release's creators or else, for a
+  channel, the channel title (your edited titles take the place of the
+  source's), and the date from the release's published time when it is a valid
+  calendar date, as YYYY-MM-DD. OMD never replaces a tag the source has and never adds an album or
+  album artist;
 - one JPEG or PNG cover of at most 4096 pixels per side, preferring the one marked
   as the front cover. OMD decodes the picture and encodes it again, so only its
   pixels are kept: no EXIF, colour profile, animation or hidden bytes.
@@ -76,8 +82,10 @@ Subscriptions can notify you about new matches or download them automatically.
 Choose that behavior explicitly. Downloads, history and destination-file operations
 remain engine-owned. A preview/preparation does not itself start a download.
 
-Keep background operation off unless you want work to continue after clients
-close. Settings explains its startup integration. Accounts are optional and
+Keep background operation off unless you want work to continue after the
+desktop app closes: with it off, quitting the app stops OMD, and unfinished
+downloads continue the next time you open it. Settings explains its startup
+integration. Accounts are optional and
 source-specific, and many sources need none.
 
 ## Engine and CLI
@@ -101,6 +109,17 @@ The last command returns a permission review. After inspecting it, repeat with
 `--approve` and the **engine-returned approval digest**, not the file's SHA-256.
 Use `omd --help` and each subcommand's `--help` for exact options. Account imports
 use stdin rather than secret command-line arguments.
+
+Each `omd` command holds a client lease only while it runs, and asks the
+engine to finish its downloads after it leaves. With background operation off,
+an engine that no client holds stops about a minute after it starts. When the
+last client to leave was the CLI or an MCP server, it first finishes every
+queued and running download: a download submitted from the CLI finishes, then
+the engine stops at its next check (within seconds). Downloads queued behind a
+destination's storage operation, and paused or failed downloads, do not keep it
+running; they continue the next time the engine starts. When the desktop app is
+the last to leave, the engine stops without waiting, as quitting the app
+intends.
 
 ## Agents and troubleshooting
 

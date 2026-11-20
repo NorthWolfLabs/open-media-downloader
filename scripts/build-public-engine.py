@@ -12,7 +12,10 @@ VC runtime DLL prerequisite in the engine and private helper bridge. It
 refuses ambient settings that would replace or bypass those flags, builds the locked
 release binaries and refuses output that still contains a remapped root or the home
 directory. Development builds use plain `cargo build` and are not remapped.
-Signing, notarization and release acceptance remain separate steps.
+`--scan DIR` applies the same check to every file of an assembled tree, such as a
+packaged runtime's bin/ with the macOS sign-in window app bundle (its Info.plist and
+icon as well as the binary). Signing, notarization and release acceptance remain
+separate steps.
 """
 import argparse
 import hashlib
@@ -134,6 +137,30 @@ def leaks(data, entries, home=str(Path.home())):
     return [{'host': needle, 'count': data.count(needle.encode())} for needle in needles if data.count(needle.encode())]
 
 
+def scan(root, entries, home=str(Path.home())):
+    """{relative path: leaks} for every regular file under root; links are refused, and
+    so are a directory that cannot be listed and a tree with no files: an unscanned
+    file is never reported clean."""
+    root = Path(os.path.abspath(root))
+    require(root.is_dir() and not root.is_symlink(), f'{root} is not a directory')
+
+    def unreadable(error):
+        require(False, f'Cannot list {error.filename} in the scanned tree: {error.strerror}')
+    found, files = {}, 0
+    for parent, dirs, names in os.walk(root, onerror=unreadable):
+        for name in dirs + names:
+            require(not os.path.islink(os.path.join(parent, name)), f'Refusing a symbolic link in the scanned tree: {os.path.join(parent, name)}')
+        for name in names:
+            path = Path(parent, name)
+            require(path.is_file(), f'Refusing a special file in the scanned tree: {path}')
+            files += 1
+            hits = leaks(path.read_bytes(), entries, home)
+            if hits:
+                found[path.relative_to(root).as_posix()] = hits
+    require(files > 0, f'{root} contains no files to scan')
+    return files, found
+
+
 def digest(path):
     with open(path, 'rb') as f:
         return {'bytes': os.path.getsize(path), 'sha256': hashlib.file_digest(f, 'sha256').hexdigest()}
@@ -169,14 +196,20 @@ def main(argv=None, env=None):
     parser.add_argument('--output', type=Path, help='new absolute directory for bin/ and build-report.json')
     parser.add_argument('--jobs', type=int, help='Cargo parallel jobs')
     parser.add_argument('--check', action='store_true', help='validate inputs and print the remapping plan without building')
+    parser.add_argument('--scan', type=Path, help='check every file of an assembled tree (such as a packaged runtime bin/) for the builder roots; builds nothing')
     args = parser.parse_args(argv)
-    require(args.check or (args.output and args.output.is_absolute() and not os.path.lexists(args.output)), 'Use --output with a new absolute directory, or --check')
+    require(not (args.scan and (args.check or args.output or args.jobs)), '--scan takes only --target')
+    require(args.scan or args.check or (args.output and args.output.is_absolute() and not os.path.lexists(args.output)), 'Use --output with a new absolute directory, --check or --scan')
     require(args.jobs is None or 1 <= args.jobs <= 64, '--jobs must be between 1 and 64')
     report = {'schema': 'omd-public-engine-build-v1', 'status': 'checked', 'release_accepted': False, **plan(args.target, env),
               'limits': 'Covers paths rustc derives from source locations under these roots; literal strings and linker inputs are checked after the build, not rewritten.'}
     if args.jobs:
         report['command'] += ['--jobs', str(args.jobs)]
-    if not args.check:
+    if args.scan:
+        files, found = scan(args.scan, report['remap'])
+        require(not found, f'The scanned tree still contains builder paths: {json.dumps(found)}')
+        report.update(status='scanned', scanned=str(Path(os.path.abspath(args.scan))), scanned_files=files, builder_paths=0)
+    elif not args.check:
         build = subprocess.run(report['command'], cwd=ROOT, env={**env, 'CARGO_HOME': report['cargo_home'], 'CARGO_TARGET_DIR': report['target_dir'], 'CARGO_ENCODED_RUSTFLAGS': encode(report['remap']) + ('\x1f-C\x1ftarget-feature=+crt-static' if args.target.endswith('windows-msvc') else '')})
         require(build.returncode == 0, f'cargo build failed ({build.returncode})')
         suffix = '.exe' if 'windows' in args.target else ''

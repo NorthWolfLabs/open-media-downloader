@@ -42,6 +42,17 @@ test('fixture authoring executes a pure component and enforces the engine contra
     await recordFixture(runtime,{operation:'search'},()=>({status:200,body:'<article data-id="one"><h2>Title PRIVATE-SESSION</h2><a href="/one">Details</a></article>'}),output,{secrets:['PRIVATE-SESSION']});
     const recorded=await readFile(output,'utf8');assert.ok(!recorded.includes('PRIVATE-SESSION'));assert.equal(JSON.parse(recorded).result.items[0].title,'Title [redacted]');
     const optional=await runtime.invoke({operation:'collection'});assert.equal(optional.result.error.code,'unsupported');
+    // The engine sends the collection hint only to a source that declares it, so a
+    // fixture for any other source cannot set it.
+    const hint={provider:'org.example.conformance',id:'results:demo'};
+    await assert.rejects(runtime.invoke({operation:'identify',url:'https://example.com/one',collection_hint:hint}),/collection_hint capability/);
+    // Once declared, a component that never reads the hint returns the same result with it.
+    const manifest=JSON.parse(await readFile(join(temp,'omd-plugin.json'),'utf8'));
+    await writeFile(join(temp,'omd-plugin.json'),JSON.stringify({...manifest,capabilities:[...manifest.capabilities,'collection_hint']}));
+    const declared=await harness(temp,{worker:process.env.OMD_PLUGIN_WORKER??fileURLToPath(new URL('../../../target/debug/omd-plugin-worker-v2',import.meta.url)),component:join(temp,'.omd-build','plugin.wasm')});
+    const plain=await declared.invoke({operation:'identify',url:'https://example.com/one'});
+    const hinted=await declared.invoke({operation:'identify',url:'https://example.com/one',collection_hint:hint});
+    assert.equal(plain.result.ok,true);assert.deepEqual(hinted.result,plain.result);
     const trapped=await runtime.invoke({operation:'search',query:'trap'});
     assert.equal(trapped.result.error.code,'source_error');
     assert.ok(!JSON.stringify(trapped).includes('An intentional author error'));

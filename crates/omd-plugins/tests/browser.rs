@@ -52,6 +52,7 @@ async fn pure_component_browser_uses_real_broker_and_releases_sessions_on_succes
         page_size: 10,
         policy: SelectionPolicy::default(),
         now: String::new(),
+        collection_hint: None,
     };
     let cancel = tokio_util::sync::CancellationToken::new();
     for _ in 0..5 {

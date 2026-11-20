@@ -99,6 +99,16 @@ fn unbounded_author_loop_is_interrupted() {
     let (result, _) = invoke_cached("loop", false, Some(&cache));
     assert!(result.get("error").is_some(), "{result}");
     assert!(start.elapsed().as_secs() < 45);
+    // The frame names the limit that fired and how long the plugin ran, for
+    // the engine log.
+    assert!(
+        matches!(result["limit"].as_str(), Some("epoch" | "fuel")),
+        "{result}"
+    );
+    assert!(
+        result["timing"]["execute_ms"].as_u64().unwrap() > 0,
+        "{result}"
+    );
 }
 
 #[test]

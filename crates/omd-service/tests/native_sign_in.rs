@@ -93,7 +93,7 @@ async fn native_window_saves_only_source_credentials_and_reports_each_ending() {
             },
         )]))),
         running: Arc::new(AsyncMutex::new(BTreeMap::new())),
-        clients: Arc::new(AsyncMutex::new(BTreeMap::new())),
+        clients: Default::default(),
     };
     let call = async |app: &App, method: &str, path: &str, body: Value| {
         let response = router(app.clone(), vec![])

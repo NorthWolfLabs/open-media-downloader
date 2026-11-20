@@ -58,7 +58,7 @@ async fn real_helper_cannot_read_write_spawn_or_connect_outside_policy() {
 async fn managed_ytdlp_runs_inside_the_same_confinement() {
     let work = tempfile::tempdir().unwrap();
     let executable = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../artifacts/tools/yt-dlp/2026.08.19/yt-dlp_macos");
+        .join("../../artifacts/tools/yt-dlp/2026.10.26/yt-dlp_macos");
     let policy = omd_isolation::Policy {
         executable,
         readable: vec![],
@@ -93,7 +93,7 @@ async fn managed_ytdlp_runs_inside_the_same_confinement() {
             );
         }
     };
-    assert_eq!(String::from_utf8(output).unwrap().trim(), "2026.08.19");
+    assert_eq!(String::from_utf8(output).unwrap().trim(), "2026.10.26");
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -344,7 +344,7 @@ async fn linux_managed_ytdlp_starts_inside_confinement() {
     );
     assert_eq!(
         String::from_utf8(output.stdout).unwrap().trim(),
-        "2026.08.19"
+        "2026.10.26"
     );
 }
 

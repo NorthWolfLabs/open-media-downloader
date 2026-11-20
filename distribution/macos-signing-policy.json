@@ -70,13 +70,18 @@
     },
     {
       "id": "sign-in-window",
-      "path": "{resources}/bin/omd-signin",
-      "filetype": "execute",
-      "sign": "nested",
+      "path": "{resources}/bin/OMD Sign-In.app",
+      "filetype": "app-bundle",
+      "sign": "nested-bundle",
+      "bundle": {
+        "identifier": "labs.northwolf.omd.signin",
+        "executable": "Contents/MacOS/omd-signin",
+        "members": ["Contents/Info.plist", "Contents/MacOS/omd-signin", "Contents/Resources/AppIcon.icns"]
+      },
       "entitlements": {},
       "binding": "engine-bin",
       "receipt": "engine",
-      "basis": "wry/tao native sign-in window. WKWebView runs page JavaScript in WebKit's own XPC services, so this host needs no JIT or unsigned-executable-memory exception."
+      "basis": "wry/tao native sign-in window, installed as an application bundle so the process the engine launches at Contents/MacOS/omd-signin has its own bundle identifier, name and icon. Signed as a nested bundle before the outer seal: the main executable with hardened runtime, Info.plist bound by its code directory and the icon by the bundle seal. WKWebView runs page JavaScript in WebKit's own XPC services, so this host needs no JIT or unsigned-executable-memory exception."
     },
     {
       "id": "plugin-worker",

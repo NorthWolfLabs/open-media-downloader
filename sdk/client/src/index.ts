@@ -34,10 +34,13 @@ export class EngineClient {
     if(blob.size>4*1024*1024||!/^image\/(jpeg|png|webp|gif|avif)$/.test(blob.type))throw new Error("Unsupported artwork response.");
     return blob;
   }
-  async attach(){return this.request<{id:string;heartbeat_seconds:number;lease_seconds:number}>("/v2/clients",{method:"POST"});}
+  /** Attach a client lease. `finish_downloads` asks the engine, when this is the last
+   * client to leave and background operation is off, to finish queued and running
+   * downloads before it stops; leave it unset when closing your client should stop them. */
+  async attach(options:{finish_downloads?:boolean}={}){return this.request<{id:string;heartbeat_seconds:number;lease_seconds:number;finish_downloads?:boolean|null}>(options.finish_downloads?"/v2/clients?finish_downloads=true":"/v2/clients",{method:"POST"});}
   async heartbeat(id:string){return this.request(`/v2/clients/${encodeURIComponent(id)}`,{method:"POST"});}
   async detach(id:string){return this.request(`/v2/clients/${encodeURIComponent(id)}`,{method:"DELETE"});}
-  async operation<T=Page<Collection>|Page<Release>|Collection|IdentifiedSource>(provider:string,input:Partial<Omit<ProviderRequest,"now">>&Pick<ProviderRequest,"operation">){return this.request<T>(`/v2/sources/${encodeURIComponent(provider)}/invoke`,{method:"POST",body:{reference:null,query:null,url:null,cursor:null,page_size:100,policy:{},...input}});}
+  async operation<T=Page<Collection>|Page<Release>|Collection|IdentifiedSource>(provider:string,input:Partial<Omit<ProviderRequest,"now"|"collection_hint">>&Pick<ProviderRequest,"operation">){return this.request<T>(`/v2/sources/${encodeURIComponent(provider)}/invoke`,{method:"POST",body:{reference:null,query:null,url:null,cursor:null,page_size:100,policy:{},...input}});}
   async jobs(query="",cursor:string|null=null,state?:string){const params=new URLSearchParams({q:query,limit:"100"});if(cursor)params.set("cursor",cursor);if(state)params.set("state",state);return this.request<Page<Job>>(`/v2/jobs?${params}`);}
   async destinations(){return this.request<Page<Destination>>("/v2/destinations");}
   /** Enumerate small configuration lists without silently dropping later pages. */

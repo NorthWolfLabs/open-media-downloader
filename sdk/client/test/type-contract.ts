@@ -21,3 +21,22 @@ const httpMode: components['schemas']['ProviderManifest']['account_mode'] = doma
 // @ts-expect-error Plugin-specific verification protocols are not connection modes.
 const invalidMode: AccountMode = 'org.example.account-check';
 void httpMode; void invalidMode;
+
+// The engine sets the collection hint itself, only when it resolves a listed
+// release again; the public source operation does not accept it.
+import {EngineClient} from '../src/index.js';
+async function sourceOperation(engine:EngineClient){
+ await engine.operation('org.example.source',{operation:'resolve',reference:{provider:'org.example.source',id:'item'}});
+ // @ts-expect-error Clients cannot send the engine-owned collection hint.
+ await engine.operation('org.example.source',{operation:'resolve',collection_hint:{provider:'org.example.source',id:'results:demo'}});
+}
+void sourceOperation;
+
+// Attaching keeps its earlier form; finishing downloads after leaving is opt-in.
+async function leases(engine:EngineClient){
+ const lease=await engine.attach();
+ const finishing=await engine.attach({finish_downloads:true});
+ const recorded:boolean|null|undefined=finishing.finish_downloads;
+ void lease.lease_seconds; void recorded;
+}
+void leases;

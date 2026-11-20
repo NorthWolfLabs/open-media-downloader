@@ -1,6 +1,6 @@
 # OMD provider SDK source kit
 
-This kit contains provider SDK 0.11.1 source, the pinned snapshot-transformer input
+This kit contains provider SDK 0.12.0 source, the pinned snapshot-transformer input
 and its Rust source/build lock. It contains no engine service, desktop UI or production
 source plugin. The JavaScript/runtime dependencies retain their own licenses.
 

@@ -4,7 +4,7 @@
 import argparse, copy, hashlib, importlib.util, io, json, unittest
 from unittest.mock import patch
 from pathlib import Path
-from materials_contract import validate, validate_native_receipt
+from materials_contract import validate, validate_native_receipt, binary_path, binary_name
 class PublishedZip(unittest.TestCase):
  def test_original_members_and_rejected_unsafe_archives(self):
   import native_review, stat, tempfile, warnings, zipfile
@@ -26,6 +26,14 @@ class PublishedZip(unittest.TestCase):
    write([('LICENSE',b'long')])
    with patch.object(native_review,'MAX_ARCHIVE_BYTES',3):
     with self.assertRaisesRegex(ValueError,'budget'):native_review.Archive(p,True)
+class InstalledPaths(unittest.TestCase):
+ def test_only_the_macos_sign_in_window_is_a_bundle(self):
+  bundle='bin/OMD Sign-In.app/Contents/MacOS/omd-signin'
+  for target in ('darwin-arm64','darwin-x64','aarch64-apple-darwin','x86_64-apple-darwin'):
+   self.assertEqual(binary_path('omd-signin',target),bundle,target);self.assertEqual(binary_path('omd-engine',target),'bin/omd-engine',target)
+  for target,path in (('linux-x64','bin/omd-signin'),('x86_64-unknown-linux-gnu','bin/omd-signin'),('win32-arm64','bin/omd-signin.exe'),('aarch64-pc-windows-msvc','bin/omd-signin.exe')):
+   self.assertEqual(binary_path('omd-signin',target),path,target)
+  self.assertEqual([binary_name(p) for p in (bundle,'bin/omd','bin/OMD Sign-In.app/Contents/Info.plist','bin/x/y','tools/node/node','bin/')],['omd-signin','omd',None,None,None,None])
 class Contract(unittest.TestCase):
  def test_shared_contract(self):
   f=json.loads((Path(__file__).resolve().parent.parent/'distribution/materials-contract-fixtures-v1.json').read_text())

@@ -1,6 +1,6 @@
 {
   "name": "@northwolf/omd-browser-adapter",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "license": "MIT",
   "private": true,
   "type": "module",

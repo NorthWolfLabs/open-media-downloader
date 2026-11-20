@@ -35,7 +35,8 @@ pub(crate) struct Status {
     pub bundled: Option<Review>,
     pub issue: Option<Problem>,
 }
-/// The digest the previous app run recorded for its included set.
+/// The `digest` a setting records: the included set the previous app run
+/// recorded, or the set a person last activated themselves.
 pub(crate) async fn bundled_digest(store: &Store, setting: &str) -> Option<String> {
     store
         .setting(setting)
@@ -44,9 +45,62 @@ pub(crate) async fn bundled_digest(store: &Store, setting: &str) -> Option<Strin
         .flatten()
         .and_then(|value| value.get("digest")?.as_str().map(str::to_owned))
 }
+/// The label the engine gives the media tools a distribution includes.
+pub(crate) const INCLUDED_TOOLS_LABEL: &str = "Included media tools";
+/// The setting that records the media tool set a person last activated
+/// themselves (`{"digest": ...}`), or null when they returned to the
+/// included set.
+pub(crate) const CHOSEN_TOOLS: &str = "chosen_tools";
 /// Whether an upgraded app's included set replaces the active one.
-pub(crate) fn adopts_bundled(previous: Option<&str>, active: Option<&str>, new: &str) -> bool {
-    matches!((previous, active), (Some(previous), Some(active)) if previous == active && active != new)
+///
+/// `active` is the active set's digest and label, and `chosen` the set the
+/// person last activated themselves. The engine adopts the new included set
+/// when the active set is the one the previous app included, or when it still
+/// carries the engine's own included label: an even older app installed it
+/// automatically and the person never chose another. A set the person
+/// activated themselves is kept even when it is an earlier included set (a
+/// rollback), and so is a set installed under their own label, or having none
+/// after a removal.
+pub(crate) fn adopts_bundled(
+    previous: Option<&str>,
+    active: Option<(&str, &str)>,
+    included_label: &str,
+    new: &str,
+    chosen: Option<&str>,
+) -> bool {
+    let Some((digest, label)) = active else {
+        return false;
+    };
+    digest != new && chosen != Some(digest) && (previous == Some(digest) || label == included_label)
+}
+/// Records that the person activated `digest` themselves, so an app upgrade
+/// keeps it. Activating the set this app includes clears the record instead:
+/// the person returned to the included set, which later upgrades replace.
+pub(crate) async fn record_choice(
+    store: &Store,
+    setting: &str,
+    bundled_setting: &str,
+    digest: &str,
+) -> Result<(), omd_store::StoreError> {
+    let included = bundled_digest(store, bundled_setting).await;
+    let choice = if included.as_deref() == Some(digest) {
+        Value::Null
+    } else {
+        json!({ "digest": digest })
+    };
+    store.set_setting(setting, &choice).await
+}
+/// The active entry's digest and label, read from a singleton active table.
+pub(crate) async fn active_entry(
+    store: &Store,
+    query: &str,
+) -> std::result::Result<Option<(String, String)>, sqlx::Error> {
+    let row: Option<(Option<String>, Option<String>)> =
+        sqlx::query_as(query).fetch_optional(&store.pool).await?;
+    Ok(match row {
+        Some((Some(digest), Some(label))) => Some((digest, label)),
+        _ => None,
+    })
 }
 fn error(problem: Problem) -> ApiError {
     ApiError(StatusCode::CONFLICT, problem)
@@ -68,6 +122,7 @@ pub async fn initialize(
             let tools = omd_tools::read_manifest(path).await?;
             let review = omd_tools::review(&tools).await?;
             let previous = bundled_digest(store, "bundled_tools_review").await;
+            let chosen = bundled_digest(store, CHOSEN_TOOLS).await;
             store
                 .set_setting("bundled_tools_review", &json!(review))
                 .await
@@ -80,28 +135,28 @@ pub async fn initialize(
                 .map_err(|_| {
                     Problem::new("tool_storage", "Could not read managed tool history.")
                 })?;
-            let active: Option<String> =
-                sqlx::query_scalar("SELECT digest FROM managed_tool_active WHERE singleton=1")
-                    .fetch_one(&store.pool)
-                    .await
-                    .map_err(|_| {
-                        Problem::new("tool_storage", "Could not read the active tool set.")
-                    })?;
+            let active = active_entry(
+                store,
+                "SELECT a.digest,t.label FROM managed_tool_active a \
+                 LEFT JOIN managed_tool_sets t ON t.digest=a.digest WHERE a.singleton=1",
+            )
+            .await
+            .map_err(|_| Problem::new("tool_storage", "Could not read the active tool set."))?;
             // First installation accepts the distribution's included tool set,
-            // and an app upgrade replaces the set the previous app included
-            // while that set is still the active one. A set the person chose
-            // or removed is kept; the new included set is offered for review.
+            // and an app upgrade replaces an included set that is still the
+            // active one. A set the person chose or removed is kept; the new
+            // included set is offered for review.
             if existing == 0
-                || adopts_bundled(previous.as_deref(), active.as_deref(), &review.digest)
-            {
-                omd_tools::install(
-                    store,
-                    profile,
-                    &tools,
+                || adopts_bundled(
+                    previous.as_deref(),
+                    active.as_ref().map(|(d, l)| (d.as_str(), l.as_str())),
+                    INCLUDED_TOOLS_LABEL,
                     &review.digest,
-                    "Included media tools",
+                    chosen.as_deref(),
                 )
-                .await?;
+            {
+                omd_tools::install(store, profile, &tools, &review.digest, INCLUDED_TOOLS_LABEL)
+                    .await?;
                 omd_tools::activate(store, profile, &review.digest).await?;
             }
             Ok::<_, Problem>(())
@@ -286,6 +341,13 @@ pub(crate) async fn activate(
         .map_err(error)?;
     app.runtime
         .register_media(&installed.digest, media(&app, &installed)?, true);
+    record_choice(
+        &app.store,
+        CHOSEN_TOOLS,
+        "bundled_tools_review",
+        &installed.digest,
+    )
+    .await?;
     Ok(Json(installed))
 }
 fn selected(review: &Review) -> BTreeSet<String> {
@@ -366,5 +428,68 @@ pub async fn run(app: App) {
                 break;
             }
         }
+    }
+}
+#[cfg(test)]
+mod adoption_tests {
+    use super::{INCLUDED_TOOLS_LABEL, adopts_bundled};
+    use crate::browsers::INCLUDED_BROWSER_LABEL;
+
+    #[test]
+    fn upgrades_replace_only_sets_the_engine_installed_itself() {
+        for label in [INCLUDED_TOOLS_LABEL, INCLUDED_BROWSER_LABEL] {
+            let included = Some(("old", label));
+            // The previous app's included set is still active.
+            assert!(adopts_bundled(Some("old"), included, label, "new", None));
+            // An even older app installed it: no matching record, or none.
+            assert!(adopts_bundled(Some("other"), included, label, "new", None));
+            assert!(adopts_bundled(None, included, label, "new", None));
+            // A choice of some other set does not keep this one.
+            assert!(adopts_bundled(None, included, label, "new", Some("x")));
+            // Already the new set.
+            assert!(!adopts_bundled(
+                Some("old"),
+                Some(("new", label)),
+                label,
+                "new",
+                None
+            ));
+            // A set the person chose, or none after a removal, is kept.
+            assert!(!adopts_bundled(
+                Some("other"),
+                Some(("old", "Mine")),
+                label,
+                "new",
+                None
+            ));
+            assert!(!adopts_bundled(
+                None,
+                Some(("old", "Mine")),
+                label,
+                "new",
+                None
+            ));
+            assert!(!adopts_bundled(Some("old"), None, label, "new", None));
+            assert!(!adopts_bundled(None, None, label, "new", None));
+            // An included set the person activated themselves (a rollback to
+            // an earlier included set) is kept, with or without a record.
+            for previous in [None, Some("old"), Some("other")] {
+                assert!(!adopts_bundled(
+                    previous,
+                    included,
+                    label,
+                    "new",
+                    Some("old")
+                ));
+            }
+        }
+        // The other kind's label is not this kind's included label.
+        assert!(!adopts_bundled(
+            None,
+            Some(("old", INCLUDED_BROWSER_LABEL)),
+            INCLUDED_TOOLS_LABEL,
+            "new",
+            None
+        ));
     }
 }

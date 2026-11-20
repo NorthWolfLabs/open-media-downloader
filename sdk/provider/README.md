@@ -231,3 +231,52 @@ engine-owned, expiring completion check. `sign_in.completion_cookies` applies on
 to that browser workflow. Hosts still come exclusively from credential grants;
 this preference conveys no hosts or secrets. Independently maintained connectors
 that previously relied on private UI dispatch must declare their preferred mode.
+
+### Collection hint on resolve (0.12.0)
+
+One release can be listed in several collections: search results, a playlist
+and its own series, for example. When a person downloads releases selected from
+a collection, the engine resolves each release again and refuses the download
+with `selection_changed` unless the resolved release's `collection` is the
+collection it was listed under.
+
+To be told that collection, declare the `collection_hint` capability in
+`omd-plugin.json` next to `resolve`:
+
+```json
+"capabilities": ["search", "collection", "releases", "resolve", "collection_hint"]
+```
+
+On those calls `resolve` then receives `input.collection_hint`, the collection
+the release was listed under. Declaring the capability also applies the check to
+subscriptions that download automatically: the release must resolve under the
+followed collection (a release that resolves as its own `item` collection, an
+image post for example, keeps that identity). Sources that don't declare it keep
+the earlier subscription behavior and may file a followed release elsewhere. When a download refreshes expired transport
+locations, it is the collection of the approved plan, and the engine requires the
+same collection back. If the release still belongs to the hinted collection,
+return that collection as both `release.collection` and `collection.reference`,
+with its own title and canonical URL:
+
+```ts
+resolve(input) {
+  const item = loadItem(input.reference!);
+  const hint = input.collection_hint;
+  const parent = hint && listsItem(hint, item) ? listedCollection(hint) : seriesOf(item);
+  return {release: {...toRelease(item), collection: parent.reference},
+    collection: parent, resources: toResources(item), expires_at: null};
+}
+```
+
+Keep release IDs stable. Don't encode the listed collection into a release ID:
+that breaks duplicate detection. The hint grants nothing. It is engine-owned,
+absent on every other call (including direct preparations and client-requested
+operations), and the engine still requires exactly the listed collection back.
+
+A source that does not declare the capability never receives the field: its
+requests are byte-for-byte what earlier engines sent, so a source that validates
+its input against the earlier closed request schema keeps working. Engines
+before the capability existed refuse to install a manifest that declares it. The
+fixture harness refuses a fixture `input` with `collection_hint` unless the
+manifest declares the capability, and plugin workers from earlier engines reject
+that field, so test it with the worker from a matching engine.

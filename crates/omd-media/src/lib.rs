@@ -1,8 +1,8 @@
 //! Controlled media extraction. Provider components receive projected metadata,
 //! never arbitrary tool arguments, local paths, headers, or credential bytes.
 use omd_domain::{
-    HostGrant, Locator, LogicalOutput, MediaSelection, Plan, Problem, Recipe, ResolvedRelease,
-    SelectionPolicy, digest, path_segment,
+    CollectionKind, HostGrant, Locator, LogicalOutput, MediaSelection, Plan, Problem, Recipe,
+    ResolvedRelease, SelectionPolicy, digest, path_segment,
 };
 use omd_network::Network;
 use serde::{Deserialize, Serialize};
@@ -1313,7 +1313,7 @@ impl Media {
         if before.packets == 0 {
             return Err(unverified());
         }
-        let tags = source_tags(probe, work, &name, cancel).await;
+        let tags = with_plan_fallback(plan, source_tags(probe, work, &name, cancel).await);
         let cover = cover(plan.recipe, &source);
         let rebuild = Rebuild {
             ffmpeg,
@@ -1912,6 +1912,114 @@ fn select_tags(data: &Value) -> Vec<(&'static str, String)> {
             valid.then(|| (*key, value.to_owned()))
         })
         .collect()
+}
+/// The tags a rebuild writes: the source's own kept tags (`select_tags`), and
+/// for values the source left out a conservative fallback from the reviewed
+/// plan. The title comes from the release title (or its reviewed override),
+/// the artist from the release's creators or else, for a channel, the
+/// collection title (or its override), and the date only when the release's
+/// published time is a valid calendar date (`calendar_date`). A kept source tag
+/// is never replaced,
+/// no album or album artist is made up, and a fallback that is not
+/// `container::plain_text` is left out. The order follows `container::TAGS`.
+fn with_plan_fallback(
+    plan: &Plan,
+    source: Vec<(&'static str, String)>,
+) -> Vec<(&'static str, String)> {
+    let plain = |value: String| container::plain_text(value.as_bytes()).then_some(value);
+    let creators = || {
+        let summary = plan.release.preview.as_ref()?.summary.as_ref()?;
+        let mut names: Vec<&str> = Vec::new();
+        for name in summary.creators.iter().map(|name| name.trim()) {
+            if !name.is_empty() && !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        plain(names.join(", "))
+    };
+    let fallback = |key: &str| match key {
+        "title" => plain(plan.release_title().trim().to_owned()),
+        // A channel's title names who publishes it. Other collections (a
+        // series, a playlist, search results) are not artists.
+        "artist" => creators().or_else(|| {
+            (plan.collection.kind == CollectionKind::Channel)
+                .then(|| plain(plan.collection_title().trim().to_owned()))
+                .flatten()
+        }),
+        "date" => plan.release.published_at.as_deref().and_then(calendar_date),
+        _ => None,
+    };
+    container::TAGS
+        .iter()
+        .filter_map(|(key, _, _, _)| {
+            let kept = source.iter().find(|(name, _)| name == key);
+            match kept {
+                Some((_, value)) => Some((*key, value.clone())),
+                None => fallback(key).map(|value| (*key, value)),
+            }
+        })
+        .collect()
+}
+/// The calendar date of a release's published time, as `YYYY-MM-DD`, when it
+/// is a valid ISO 8601 calendar date or RFC 3339 timestamp. Partial dates,
+/// impossible days and free text are rejected.
+fn calendar_date(value: &str) -> Option<String> {
+    let value = value.trim();
+    let (date, time) = match value.split_once(['T', 't', ' ']) {
+        Some((date, time)) => (date, Some(time)),
+        None => (value, None),
+    };
+    let field = |text: &str, width: usize| {
+        (text.len() == width && text.bytes().all(|b| b.is_ascii_digit()))
+            .then(|| text.parse::<u32>().ok())
+            .flatten()
+    };
+    let mut parts = date.split('-');
+    let year = field(parts.next()?, 4)?;
+    let month = field(parts.next()?, 2)?;
+    let day = field(parts.next()?, 2)?;
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days = match month {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        _ => return None,
+    };
+    let valid = parts.next().is_none()
+        && year > 0
+        && (1..=days).contains(&day)
+        && time.is_none_or(rfc3339_time);
+    valid.then(|| date.to_owned())
+}
+/// An RFC 3339 time of day with its offset: `HH:MM:SS[.fraction](Z|±HH:MM)`.
+fn rfc3339_time(time: &str) -> bool {
+    let two = |text: &str, max: u32| {
+        text.len() == 2
+            && text.bytes().all(|b| b.is_ascii_digit())
+            && text.parse::<u32>().is_ok_and(|n| n <= max)
+    };
+    let (clock, offset) = match time.strip_suffix(['Z', 'z']) {
+        Some(clock) => (clock, None),
+        None => match time.rfind(['+', '-']) {
+            Some(at) => (&time[..at], Some(&time[at + 1..])),
+            None => return false,
+        },
+    };
+    let (clock, fraction) = match clock.split_once('.') {
+        Some((clock, fraction)) => (clock, Some(fraction)),
+        None => (clock, None),
+    };
+    let fields: Vec<&str> = clock.split(':').collect();
+    fields.len() == 3
+        && two(fields[0], 23)
+        && two(fields[1], 59)
+        && two(fields[2], 60)
+        && fraction
+            .is_none_or(|f| (1..=9).contains(&f.len()) && f.bytes().all(|b| b.is_ascii_digit()))
+        && offset.is_none_or(
+            |offset| matches!(offset.split_once(':'), Some((h, m)) if two(h, 23) && two(m, 59)),
+        )
 }
 /// The confined FFmpeg arguments that rebuild an audio output: a stream copy
 /// of the first audio stream, no source metadata, chapters, pictures or
@@ -2604,6 +2712,137 @@ mod tests {
             [("track", "4".to_string()), ("disc", "1/2".into())]
         );
         assert!(select_tags(&json!({})).is_empty());
+    }
+    #[test]
+    fn plan_values_fill_only_missing_tags() {
+        use omd_domain::{Collection, CollectionSummary, OutputMetadata};
+        let mut plan: Plan =
+            serde_json::from_str(include_str!("../../../tests/fixtures/v2-plan.json")).unwrap();
+        plan.release.title = "Episode Seven".into();
+        plan.collection.title = "Fixture Show".into();
+        plan.collection.kind = CollectionKind::Channel;
+        plan.release.published_at = Some("2026-02-28T09:30:00+01:00".into());
+        let tags = |plan: &Plan, source: &[(&'static str, &str)]| {
+            with_plan_fallback(
+                plan,
+                source.iter().map(|(k, v)| (*k, v.to_string())).collect(),
+            )
+        };
+        let owned = |list: &[(&'static str, &str)]| -> Vec<(&'static str, String)> {
+            list.iter().map(|(k, v)| (*k, v.to_string())).collect()
+        };
+        // Nothing in the source: title, artist (collection title) and date.
+        assert_eq!(
+            tags(&plan, &[]),
+            owned(&[
+                ("title", "Episode Seven"),
+                ("artist", "Fixture Show"),
+                ("date", "2026-02-28")
+            ])
+        );
+        // Kept source tags win; only missing keys are filled, in TAGS order.
+        assert_eq!(
+            tags(&plan, &[("track", "3/12"), ("artist", "Source Artist")]),
+            owned(&[
+                ("title", "Episode Seven"),
+                ("artist", "Source Artist"),
+                ("date", "2026-02-28"),
+                ("track", "3/12")
+            ])
+        );
+        assert_eq!(
+            tags(&plan, &[("title", "Source Title"), ("date", "2025")]),
+            owned(&[
+                ("title", "Source Title"),
+                ("artist", "Fixture Show"),
+                ("date", "2025")
+            ])
+        );
+        // Release creators come before the collection title; reviewed
+        // overrides replace the source titles.
+        plan.release.preview = Some(Collection {
+            summary: Some(CollectionSummary {
+                creators: vec![
+                    " Host One ".into(),
+                    "".into(),
+                    "Host Two".into(),
+                    "Host One".into(),
+                ],
+                ..Default::default()
+            }),
+            ..plan.collection.clone()
+        });
+        plan.metadata.release.title = Some("Reviewed Episode".into());
+        plan.metadata.collection.title = Some("Reviewed Show".into());
+        plan.release.published_at = Some("yesterday".into());
+        assert_eq!(
+            tags(&plan, &[]),
+            owned(&[
+                ("title", "Reviewed Episode"),
+                ("artist", "Host One, Host Two")
+            ])
+        );
+        plan.release.preview = None;
+        assert_eq!(tags(&plan, &[])[1], ("artist", "Reviewed Show".to_string()));
+        // Only a channel's title stands in for the artist: a series, a
+        // playlist or search results, or a standalone item, is not one.
+        for kind in [
+            CollectionKind::Manga,
+            CollectionKind::Playlist,
+            CollectionKind::Item,
+        ] {
+            let other = Plan {
+                collection: Collection {
+                    kind,
+                    ..plan.collection.clone()
+                },
+                ..plan.clone()
+            };
+            assert_eq!(tags(&other, &[]), owned(&[("title", "Reviewed Episode")]));
+            assert_eq!(
+                tags(&other, &[("artist", "Source Artist")]),
+                owned(&[("title", "Reviewed Episode"), ("artist", "Source Artist")])
+            );
+        }
+        // Never an album or album artist, and nothing that is not plain text.
+        plan.metadata = OutputMetadata::default();
+        plan.release.title = "x".repeat(container::MAX_TEXT + 1);
+        plan.collection.title = "Line\nbreak".into();
+        assert_eq!(tags(&plan, &[]), owned(&[]));
+        assert_eq!(
+            tags(&plan, &[("album", "Source Album")]),
+            owned(&[("album", "Source Album")])
+        );
+    }
+    #[test]
+    fn only_valid_calendar_dates_become_date_tags() {
+        for (value, date) in [
+            ("2026-01-01", Some("2026-01-01")),
+            ("2026-01-01T00:00:00Z", Some("2026-01-01")),
+            ("2024-02-29T23:59:60.123+05:30", Some("2024-02-29")),
+            (" 2026-12-31 ", Some("2026-12-31")),
+            ("2026-01-01 08:00:00-08:00", Some("2026-01-01")),
+            ("2025-02-29", None),
+            ("1900-02-29", None),
+            ("2026-04-31", None),
+            ("2026-13-01", None),
+            ("2026-00-10", None),
+            ("0000-01-01", None),
+            ("2026", None),
+            ("2026-05", None),
+            ("26-05-01", None),
+            ("2026-1-01", None),
+            ("2026-01-01T25:00:00Z", None),
+            ("2026-01-01T10:00Z", None),
+            ("2026-01-01T10:00:00", None),
+            ("2026-01-01T10:00:00+0100", None),
+            ("2026-01-01T10:00:00.Z", None),
+            ("2026-01-01-01", None),
+            ("2 hours ago", None),
+            ("", None),
+        ] {
+            assert_eq!(calendar_date(value).as_deref(), date, "{value:?}");
+        }
     }
     #[test]
     fn the_front_cover_is_kept_only_as_a_decoded_still_picture() {

@@ -105,6 +105,15 @@ struct Timings {
     instantiate_ms: u128,
     execute_ms: u128,
 }
+/// Names the execution limit a trap enforced, so the engine can record which
+/// one stopped a plugin. The engine logs it; the plugin never sees it.
+fn execution_limit(error: &wasmtime::Error) -> Option<&'static str> {
+    match error.downcast_ref::<wasmtime::Trap>()? {
+        wasmtime::Trap::OutOfFuel => Some("fuel"),
+        wasmtime::Trap::Interrupt => Some("epoch"),
+        _ => None,
+    }
+}
 #[cfg(debug_assertions)]
 const BUILD_PROFILE: &str = "OMD_WORKER_PROFILE=debug";
 #[cfg(not(debug_assertions))]
@@ -113,6 +122,7 @@ fn run(
     input: Invocation,
     cached: &mut Option<Compiled>,
     timing: &mut Timings,
+    limit: &mut Option<&'static str>,
 ) -> Result<serde_json::Value> {
     if cached
         .as_ref()
@@ -194,16 +204,19 @@ fn run(
     let mut linker = Linker::new(engine);
     Provider::add_to_linker::<_, wasmtime::component::HasSelf<_>>(&mut linker, |state| state)?;
     let started = std::time::Instant::now();
-    let instance = Provider::instantiate(&mut store, component, &linker)?;
+    let instance = Provider::instantiate(&mut store, component, &linker);
     timing.instantiate_ms = started.elapsed().as_millis();
+    let instance = instance.inspect_err(|error| *limit = execution_limit(error))?;
     if input.inspect {
         return Ok(serde_json::json!({"imports":imports,"isolation":"wasm"}));
     }
     let started = std::time::Instant::now();
-    let result = instance
-        .call_invoke(&mut store, &input.payload)?
-        .map_err(anyhow::Error::msg)?;
+    let result = instance.call_invoke(&mut store, &input.payload);
+    // Recorded for failures too: how long the plugin ran before a limit stopped it.
     timing.execute_ms = started.elapsed().as_millis();
+    let result = result
+        .inspect_err(|error| *limit = execution_limit(error))?
+        .map_err(anyhow::Error::msg)?;
     if result.len() > FRAME_LIMIT / 2 {
         bail!("Provider result exceeds limit");
     }
@@ -239,9 +252,15 @@ fn main() {
         };
         let reuse = input.reuse;
         let mut timing = Timings::default();
-        let result = match run(input, &mut cached, &mut timing) {
+        let mut limit = None;
+        let result = match run(input, &mut cached, &mut timing, &mut limit) {
             Ok(v) => serde_json::json!({"result":v,"timing":timing}),
-            Err(e) => serde_json::json!({"error":format!("{e:#}"),"timing":timing}),
+            Err(e) => match limit {
+                Some(limit) => {
+                    serde_json::json!({"error":format!("{e:#}"),"timing":timing,"limit":limit})
+                }
+                None => serde_json::json!({"error":format!("{e:#}"),"timing":timing}),
+            },
         };
         if let Some(compiled) = &cached {
             compiled.executing.store(false, Ordering::SeqCst);

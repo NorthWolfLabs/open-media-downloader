@@ -64,9 +64,21 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
+/// The engine log without RUST_LOG: errors from every component, plus OMD's
+/// own warnings, which carry only redacted diagnostics such as which
+/// execution limit stopped a source and where its time went.
+const DEFAULT_LOG: &str =
+    "error,omd_engine=warn,omd_service=warn,omd_plugins=warn,omd_files=warn,omd_isolation=warn";
+
 async fn run() -> anyhow::Result<()> {
+    let filter = match std::env::var("RUST_LOG") {
+        Ok(directives) if !directives.trim().is_empty() => {
+            tracing_subscriber::EnvFilter::from_default_env()
+        }
+        _ => tracing_subscriber::EnvFilter::new(DEFAULT_LOG),
+    };
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_env_filter(filter)
         .with_writer(std::io::stderr)
         .init();
     let mut args = Args::parse();
@@ -314,11 +326,7 @@ async fn run() -> anyhow::Result<()> {
         } else {
             "omd-notify"
         }),
-        sign_in_helper: std::env::current_exe()?.with_file_name(if cfg!(windows) {
-            "omd-signin.exe"
-        } else {
-            "omd-signin"
-        }),
+        sign_in_helper: omd_service::sign_in_helper(&std::env::current_exe()?),
         store: store.clone(),
         runtime,
         acquisition: Acquisition { store, network },
@@ -328,7 +336,7 @@ async fn run() -> anyhow::Result<()> {
         shutdown: shutdown.clone(),
         providers: Arc::new(RwLock::new(providers)),
         running: Arc::new(Mutex::new(BTreeMap::new())),
-        clients: Arc::new(Mutex::new(BTreeMap::new())),
+        clients: Default::default(),
     };
     let listener =
         tokio::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, args.port)).await?;
@@ -359,25 +367,9 @@ async fn run() -> anyhow::Result<()> {
         let started = tokio::time::Instant::now();
         loop {
             tokio::select! {_=lifecycle.shutdown.cancelled()=>break,_=tokio::time::sleep(std::time::Duration::from_secs(5))=>{}}
-            let mut clients = lifecycle.clients.lock().await;
-            clients.retain(|_, lease| lease.elapsed().as_secs() < 45);
-            let empty = clients.is_empty();
-            let live = clients.keys().cloned().collect();
-            drop(clients);
-            lifecycle.browser_sessions.prune(&live).await;
-            if empty && started.elapsed().as_secs() > 60 {
-                let background = lifecycle
-                    .store
-                    .setting("preferences")
-                    .await
-                    .ok()
-                    .flatten()
-                    .and_then(|v| v["background"].as_bool())
-                    .unwrap_or(false);
-                if !background {
-                    lifecycle.shutdown.cancel();
-                    break;
-                }
+            if omd_service::idle_exit_due(&lifecycle, started.elapsed()).await {
+                lifecycle.shutdown.cancel();
+                break;
             }
         }
     });

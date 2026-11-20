@@ -28,6 +28,10 @@ const PNG: &[u8] = &[
     0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
 ];
 const SECONDS: u32 = 3;
+/// The ID3v2 frames a rebuild fills from the fixture plan when the source has
+/// no tags: its release title and, without release creators, its collection
+/// title as the artist. The fixture has no published date.
+const FALLBACK_FRAMES: [[u8; 4]; 2] = [*b"TIT2", *b"TPE1"];
 
 fn manifest() -> (Tools, PathBuf) {
     let path = PathBuf::from(
@@ -59,6 +63,8 @@ fn media(tools: Tools, work: &Path) -> Media {
 fn plan(recipe: Recipe, tools: &Tools, duration_ms: u64) -> Plan {
     let mut plan: Plan =
         serde_json::from_str(include_str!("../../../tests/fixtures/v2-plan.json")).unwrap();
+    // An audio channel: its title is the artist when a release names no creator.
+    plan.collection.kind = omd_domain::CollectionKind::Channel;
     plan.recipe = recipe;
     plan.outputs = serde_json::from_value(json!([{
         "id": "audio:main", "position": 0, "relative_path": format!("media.{}", recipe.extension()),
@@ -282,15 +288,25 @@ async fn verify(
     recipe: Recipe,
     bytes: &[u8],
 ) -> (Result<(), omd_domain::Problem>, Vec<u8>) {
+    verify_plan(
+        tools,
+        &plan(recipe, tools, u64::from(SECONDS) * 1000),
+        bytes,
+    )
+    .await
+}
+/// `verify` with a given plan for the recipe.
+async fn verify_plan(
+    tools: &Tools,
+    plan: &Plan,
+    bytes: &[u8],
+) -> (Result<(), omd_domain::Problem>, Vec<u8>) {
+    let recipe = plan.recipe;
     let work = tempfile::tempdir().unwrap();
     let path = work.path().join(format!("media.{}", recipe.extension()));
     std::fs::write(&path, bytes).unwrap();
     let result = media(tools.clone(), work.path())
-        .verify(
-            &plan(recipe, tools, u64::from(SECONDS) * 1000),
-            work.path(),
-            &CancellationToken::new(),
-        )
+        .verify(plan, work.path(), &CancellationToken::new())
         .await;
     // Nothing but the output may remain (no temporary remux file).
     let names: Vec<_> = std::fs::read_dir(work.path())
@@ -582,9 +598,15 @@ async fn mp3_with_a_still_cover_keeps_a_re_encoded_cover() {
         streams(&tools, &covered, "mp3"),
         kinds(&[("audio", "mp3", 0), ("video", "png", 1)])
     );
-    // A file without pictures or tags is still rebuilt without any tag.
+    // A file without pictures or tags gets only the plan's fallback text
+    // tags (the release and collection titles of the fixture plan).
     let plain = verified(&tools, Recipe::Mp3, &audio, codec_of(Recipe::Mp3), None).await;
-    assert!(!has(&plain, b"ID3"));
+    let (frames, rest) = id3v24(&plain);
+    assert_eq!(
+        frames.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+        FALLBACK_FRAMES
+    );
+    assert!(!has(rest, b"ID3"));
     // The PNG is decoded and written anew as the front cover; the source's
     // picture description ("Cover 0") is not kept.
     let output = verified(&tools, Recipe::Mp3, &covered, "mp3", Some("png")).await;
@@ -843,11 +865,14 @@ async fn untrusted_or_unbounded_pictures_are_removed_or_re_encoded() {
                 .is_none_or(|c| !has(c, b"acTL") && !has(c, b"fcTL")),
             "{case}: animation survives"
         );
-        // Nothing but the one re-encoded picture is in the tag.
+        // Nothing but the plan's fallback text and the one re-encoded
+        // picture is in the tag.
+        let ids: Vec<[u8; 4]> = frames.iter().map(|(id, _)| *id).collect();
         assert!(
-            frames.iter().all(|(id, _)| id == b"APIC") && frames.len() <= 1,
-            "{case}: {:?}",
-            frames.iter().map(|(id, _)| id).collect::<Vec<_>>()
+            ids.starts_with(&FALLBACK_FRAMES)
+                && ids[FALLBACK_FRAMES.len()..].iter().all(|id| id == b"APIC")
+                && ids.len() <= FALLBACK_FRAMES.len() + 1,
+            "{case}: {ids:?}"
         );
         assert!(
             !has(rest, b"APIC") && !has(rest, b"ID3"),
@@ -1655,4 +1680,112 @@ async fn only_plain_text_tags_are_kept_for_every_recipe() {
     let output = verified(&tools, Recipe::Opus, &source, "opus", None).await;
     secret(&output, "opus");
     assert_eq!(tags(&tools, &output, "opus"), expected);
+}
+
+/// Tags the source left out are filled from the reviewed plan, for every
+/// recipe: the title from the release title (here its reviewed override), the
+/// artist from the release's creators or else the collection title, and the
+/// date only from a valid published date. Kept source tags are never
+/// replaced, and no album or album artist is written. ffprobe reads back
+/// exactly the expected tags from each container.
+#[tokio::test]
+#[ignore = "requires OMD_TEST_MEDIA_TOOLS and native helper confinement"]
+async fn missing_tags_are_filled_from_the_reviewed_plan_for_every_recipe() {
+    let (tools, ffmpeg) = manifest();
+    let dir = tempfile::tempdir().unwrap();
+    let map = |pairs: &[(&str, &str)]| -> std::collections::BTreeMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    };
+    let reviewed = |recipe: Recipe, creators: &[&str], published: &str| {
+        let mut plan = plan(recipe, &tools, u64::from(SECONDS) * 1000);
+        plan.release.title = "Episode Seven".into();
+        plan.metadata.release.title = Some("Reviewed Episode Seven".into());
+        plan.collection.title = "Fixture Show".into();
+        plan.release.published_at = Some(published.into());
+        let mut preview = plan.collection.clone();
+        preview.summary = Some(omd_domain::CollectionSummary {
+            creators: creators.iter().map(|c| c.to_string()).collect(),
+            ..Default::default()
+        });
+        plan.release.preview = Some(preview);
+        plan
+    };
+    let sources = [
+        (Recipe::Mp3, mp3(&ffmpeg, dir.path())),
+        (Recipe::M4a, m4a(&ffmpeg, dir.path())),
+        (Recipe::Opus, opus_audio(&ffmpeg, dir.path())),
+    ];
+    for (recipe, audio) in &sources {
+        let ext = recipe.extension();
+        let source = tags(&tools, audio, ext);
+        assert!(
+            ["title", "artist", "date", "album", "album_artist"]
+                .iter()
+                .all(|key| !source.contains_key(*key)),
+            "{recipe:?}: {source:?}"
+        );
+        // No source tags: every fallback value is written.
+        let plan = reviewed(*recipe, &["Host One", "Host Two"], "2026-02-28T09:30:00Z");
+        let (result, output) = verify_plan(&tools, &plan, audio).await;
+        result.unwrap_or_else(|p| panic!("{recipe:?}: {}: {}", p.code, p.message));
+        assert_eq!(
+            audio_packets(&tools, &output, ext),
+            audio_packets(&tools, audio, ext),
+            "{recipe:?}: the audio packets changed"
+        );
+        assert_eq!(
+            tags(&tools, &output, ext),
+            map(&[
+                ("title", "Reviewed Episode Seven"),
+                ("artist", "Host One, Host Two"),
+                ("date", "2026-02-28"),
+            ]),
+            "{recipe:?}"
+        );
+        // Without creators a channel's title is the artist, and a date
+        // that is not a valid calendar date is left out.
+        let mut plan = reviewed(*recipe, &[], "2026-02-30");
+        let (result, output) = verify_plan(&tools, &plan, audio).await;
+        result.unwrap_or_else(|p| panic!("{recipe:?}: {}: {}", p.code, p.message));
+        assert_eq!(
+            tags(&tools, &output, ext),
+            map(&[
+                ("title", "Reviewed Episode Seven"),
+                ("artist", "Fixture Show")
+            ]),
+            "{recipe:?}"
+        );
+        // A playlist's title is not an artist.
+        plan.collection.kind = omd_domain::CollectionKind::Playlist;
+        let (result, output) = verify_plan(&tools, &plan, audio).await;
+        result.unwrap_or_else(|p| panic!("{recipe:?}: {}: {}", p.code, p.message));
+        assert_eq!(
+            tags(&tools, &output, ext),
+            map(&[("title", "Reviewed Episode Seven")]),
+            "{recipe:?}"
+        );
+    }
+    // Kept source tags win over every fallback value.
+    let source = opus_with_comments(
+        &opus_audio(&ffmpeg, dir.path()),
+        &[
+            "TITLE=Source Title".into(),
+            "ARTIST=Source Artist".into(),
+            "DATE=2025".into(),
+        ],
+    );
+    let plan = reviewed(Recipe::Opus, &["Host One"], "2026-02-28");
+    let (result, output) = verify_plan(&tools, &plan, &source).await;
+    result.unwrap_or_else(|p| panic!("{}: {}", p.code, p.message));
+    assert_eq!(
+        tags(&tools, &output, "opus"),
+        map(&[
+            ("title", "Source Title"),
+            ("artist", "Source Artist"),
+            ("date", "2025"),
+        ])
+    );
 }

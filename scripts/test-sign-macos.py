@@ -24,7 +24,8 @@ from pathlib import Path
 from unittest import mock
 
 import macos_signing as signing
-from materials_contract import validate_native_receipt
+import signin_bundle
+from materials_contract import validate_native_receipt, binary_path
 
 NATIVE = platform.system() == 'Darwin' and shutil.which('xcrun') is not None and Path('/usr/bin/codesign').exists()
 TOOLCHAIN = 'rustc 1.0.0 (synthetic)\nbinary: rustc\nhost: aarch64-apple-darwin\nrelease: 1.0.0'
@@ -32,6 +33,13 @@ ENGINE = ['omd-engine', 'omd-plugin-worker-v2', 'omd-helper-guardian', 'omd-noti
 EXE = 'open-media-downloader-desktop'
 RES = 'Contents/Resources/resources/v2'
 DIST = ['rust-std-1.0.0-aarch64-apple-darwin', 'rustc-1.0.0-aarch64-apple-darwin']
+SIGNIN = 'bin/' + signin_bundle.BUNDLE
+ICNS = b'icns' + struct.pack('>I', 8 + 8 + 16) + b'ic07' + struct.pack('>I', 8 + 16) + b'fixture artwork!'
+
+
+def installed(name):
+    """Resource-relative path of an engine binary in the macOS layout."""
+    return binary_path(name, 'darwin-arm64')
 
 
 def digest(data):
@@ -243,6 +251,10 @@ def build_app(root, *, receipts=None, mutate=None, minimum='13.5', staging='deve
     put('Contents/Resources/icon.icns', b'icns fixture')
     res('LICENSE', b'MIT fixture terms\n')
     for name in ENGINE:
+        if name == 'omd-signin':
+            for rel, (data, mode) in signin_bundle.members(exe, ICNS, '1.0.0', 'darwin-arm64').items():
+                res(SIGNIN + '/' + rel, data, mode == 0o755)
+            continue
         res('bin/' + name, worker if name == 'omd-plugin-worker-v2' else exe, True)
     for name in ('node', 'ffmpeg', 'ffprobe'):
         res(f'tools/{name}/{name}', exe, True)
@@ -353,6 +365,14 @@ class PolicyAndIdentity(unittest.TestCase):
         broken(lambda p: p['reviewed_entitlements'].append('com.apple.security.get-task-allow'), 'overlap')
         broken(lambda p: p['roles'][2].update(basis=' '), 'reviewed basis')
         broken(lambda p: p.update(extra=True), 'Invalid signing policy fields')
+        helper = next(i for i, r in enumerate(original['roles']) if r['id'] == 'sign-in-window')
+        broken(lambda p: p['roles'][helper]['bundle'].update(identifier='labs.example.other'), 'Unreviewed nested bundle layout')
+        broken(lambda p: p['roles'][helper]['bundle']['members'].append('Contents/Resources/extra.plist'), 'Unreviewed nested bundle layout')
+        broken(lambda p: p['roles'][helper].update(path='{resources}/bin/Other.app'), 'Unreviewed nested bundle layout')
+        broken(lambda p: p['roles'][helper].update(sign='nested'), 'Invalid nested bundle role')
+        broken(lambda p: p['roles'][1].update(bundle=copy.deepcopy(original['roles'][helper]['bundle'])), 'Invalid nested bundle role')
+        self.assertEqual(original['roles'][helper]['path'], '{resources}/' + SIGNIN)
+        self.assertEqual((original['roles'][helper]['filetype'], original['roles'][helper]['sign'], original['roles'][helper]['entitlements']), ('app-bundle', 'nested-bundle', {}))
 
     def test_path_folding_and_inventory_collisions(self):
         self.assertTrue(signing.within('/X/Out.app/Contents', '/x/out.app'))
@@ -422,9 +442,17 @@ class Inspection(unittest.TestCase):
         self.assertEqual(roles['browser/content/browser/chrome-headless-shell'][2], {'com.apple.security.cs.allow-jit': True})
         self.assertEqual(roles['tools/yt_dlp/yt-dlp_macos'][:2], ('yt-dlp', 'retain'))
         self.assertEqual(roles['Contents/MacOS/' + EXE], ('desktop-shell', 'outer-bundle', {}))
-        for rel in ('bin/omd', 'bin/omd-engine', 'bin/omd-helper-guardian', 'bin/omd-notify', 'bin/omd-signin', 'tools/ffmpeg/ffmpeg', 'tools/ffprobe/ffprobe'):
+        for rel in ('bin/omd', 'bin/omd-engine', 'bin/omd-helper-guardian', 'bin/omd-notify', installed('omd-signin'), 'tools/ffmpeg/ffmpeg', 'tools/ffprobe/ffprobe'):
             self.assertEqual(roles[rel][2], {}, rel)
+        self.assertEqual(roles[installed('omd-signin')][:2], ('sign-in-window', 'sign-bundle'))
+        helper = next(o for o in plan['code_objects'] if o['role'] == 'sign-in-window')
+        self.assertEqual((helper['bundle'], helper['identifier'], helper['hardened_runtime'], helper['receipt_binary']),
+                         (RES + '/' + SIGNIN, 'labs.northwolf.omd.signin', True, 'omd-signin'))
+        self.assertEqual(helper['nested_bundle']['declared_minimum'], '13.0.0')
+        self.assertIn({'path': RES + '/' + SIGNIN + '/' + signin_bundle.SEAL, 'kind': 'nested-seal',
+                       'note': 'New file: the nested bundle seal over its resources; Info.plist and this seal are bound by the main executable code directory'}, plan['transformations'])
         order = [o['path'] for o in plan['code_objects']]
+        self.assertLess(order.index(helper['path']), order.index('Contents/MacOS/' + EXE))
         dylibs = [i for i, p in enumerate(order) if p.endswith('.dylib')]
         self.assertLess(max(dylibs), order.index(RES + '/browser/content/browser/chrome-headless-shell'))
         self.assertEqual(order[-1], 'Contents/MacOS/' + EXE)
@@ -453,6 +481,46 @@ class Inspection(unittest.TestCase):
         extractor = next(o for o in plan['code_objects'] if o['role'] == 'yt-dlp')
         self.assertEqual(extractor['action'], 'stop')
         self.assertEqual(extractor['packed']['images_by_team'], {'none': 1})
+
+    def test_sign_in_window_must_be_the_exact_unsigned_nested_bundle(self):
+        exe = (Native.get() / 'exe').read_bytes()
+        def write(rel, data, mode=0o644):
+            def change(app):
+                path = app / RES / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+                path.chmod(mode)
+                reinventory(app)
+            return change
+        def remove(rel):
+            def change(app):
+                (app / RES / rel).unlink()
+                reinventory(app)
+            return change
+        info = SIGNIN + '/' + signin_bundle.INFO
+        canonical = signin_bundle.info_plist('1.0.0', '13.0.0')
+        cases = [
+            ('extra member', write(SIGNIN + '/Contents/Resources/extra.txt', b'extra'), 'must contain exactly'),
+            ('missing icon', remove(SIGNIN + '/' + signin_bundle.ICON), 'must contain exactly'),
+            ('presigned bundle', write(SIGNIN + '/' + signin_bundle.SEAL, b'<plist/>'), 'must contain exactly'),
+            ('other identifier', write(info, canonical.replace(b'labs.northwolf.omd.signin', b'labs.example.signin')), 'canonical sign-in bundle Info.plist'),
+            ('agent plist key', write(info, plistlib.dumps({**plistlib.loads(canonical), 'LSUIElement': True}, sort_keys=True)), 'canonical sign-in bundle Info.plist'),
+            ('binary plist', write(info, plistlib.dumps(plistlib.loads(canonical), fmt=plistlib.FMT_BINARY)), 'canonical sign-in bundle Info.plist'),
+            ('not an icon', write(SIGNIN + '/' + signin_bundle.ICON, b'not an icon'), 'complete ICNS'),
+            ('executable bit', write(installed('omd-signin'), exe, 0o644), 'lacks owner execute permission'),
+        ]
+        for index, (name, mutate, why) in enumerate(cases):
+            with self.subTest(name):
+                folder = self.root / f'bundle-{index}'
+                folder.mkdir()
+                with self.assertRaisesRegex(ValueError, why):
+                    signing.inspect(request(build_app(folder, mutate=mutate)))
+        # A bare helper beside the bundle is unreviewed code, never a second identity.
+        folder = self.root / 'bare'
+        folder.mkdir()
+        plan = signing.inspect(request(build_app(folder, mutate=write('bin/omd-signin', exe, 0o755))))
+        self.assertIn(('unrecognized-code', 'signing', RES + '/bin/omd-signin'), [(b['id'], b['severity'], b['subject']) for b in plan['blockers']])
+        self.assertFalse(plan['ready_for_execution'])
 
     def test_links_special_files_and_hard_links_reject(self):
         def link_file(app):
@@ -741,10 +809,29 @@ class Execution(unittest.TestCase):
         for rel, wanted in policy.items():
             self.assertEqual(self.signed_entitlements(out / rel), wanted, rel)
             image = signing.signature((out / rel).read_bytes())[0]
-            self.assertTrue(image['adhoc'] and not image['linker_signed'] and image['identifier'].startswith('labs.northwolf.omd-fixture.'), rel)
+            prefix = 'labs.northwolf.omd.signin' if rel.endswith('/omd-signin') else 'labs.northwolf.omd-fixture.'
+            self.assertTrue(image['adhoc'] and not image['linker_signed'] and image['identifier'].startswith(prefix), rel)
             self.assertEqual(image['runtime'], not rel.endswith('.dylib'), rel)
+        # The sign-in window was signed as a nested bundle, inside out: its own seal binds the
+        # icon, its main executable binds Info.plist and that seal, and the outer seal covers it.
+        bundle = out / RES / SIGNIN
+        subprocess.run(['/usr/bin/codesign', '--verify', '--strict', '--all-architectures', bundle], check=True, capture_output=True)
+        shown = subprocess.run(['/usr/bin/codesign', '--display', '--verbose=2', bundle], capture_output=True, check=True).stderr.decode()
+        self.assertIn('Identifier=labs.northwolf.omd.signin', shown)
+        self.assertIn('flags=0x10002(adhoc,runtime)', shown)
+        seal = plistlib.loads((bundle / signin_bundle.SEAL).read_bytes())
+        self.assertEqual({k: v['hash2'].hex() for k, v in seal['files2'].items()}, {'Resources/AppIcon.icns': digest(ICNS)})
+        row = next(r for r in report['objects'] if r['role'] == 'sign-in-window')
+        self.assertEqual(row['action'], 'sign-bundle')
+        self.assertEqual(row['payload']['bundle_seal'], signing.nested_seal(bundle, {'executable': signin_bundle.EXECUTABLE, 'members': list(signin_bundle.MEMBERS)}))
+        self.assertEqual(row['payload']['bundle_seal']['sha256'], digest((bundle / signin_bundle.SEAL).read_bytes()))
+        outer = plistlib.loads((out / 'Contents/_CodeSignature/CodeResources').read_bytes())['files2']
+        for rel in (*signin_bundle.MEMBERS, signin_bundle.SEAL):
+            self.assertEqual(outer['Resources/resources/v2/' + SIGNIN + '/' + rel]['hash2'].hex(), digest((bundle / rel).read_bytes()), rel)
+        rows = [r['path'] for r in json.loads((out / RES / 'build-inventory.json').read_text())['files']]
+        self.assertEqual(rows[-1], SIGNIN + '/' + signin_bundle.SEAL)
         for row in report['objects']:
-            if row['action'] in ('sign', 'replace-and-sign', 'outer-bundle'):
+            if row['action'] in ('sign', 'replace-and-sign', 'outer-bundle', 'sign-bundle'):
                 self.assertTrue(row['payload']['signature_only_change'], row['path'])
                 self.assertNotEqual(row['payload']['sha256'], (row.get('replacement') or row['source'])['sha256'], row['path'])
         resources = out / RES
@@ -777,6 +864,8 @@ class Execution(unittest.TestCase):
         labels = [c['label'] for c in report['commands']]
         self.assertEqual(labels[-1].split(':')[0], 'entitlements')
         self.assertLess(max(i for i, l in enumerate(labels) if l.startswith('sign:')), labels.index('seal:bundle'))
+        self.assertLess(labels.index('sign:' + RES + '/' + SIGNIN), labels.index('verify:' + RES + '/' + SIGNIN))
+        self.assertLess(labels.index('verify:' + RES + '/' + SIGNIN), labels.index('seal:bundle'))
 
     def test_execution_time_receipt_failure_stops_without_opt_in(self):
         fixture, app, config = self.receipts_app()

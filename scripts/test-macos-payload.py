@@ -61,5 +61,23 @@ class PayloadTests(unittest.TestCase):
         self.assertGreaterEqual(m.version('14.0'),required)
     def test_fat_bounds(self):
         with self.assertRaises(ValueError): m.slices(fat(thin(cpu=0x1000007),thin())[:-1])
+    def test_nested_bundle_floor_is_bounded_by_its_code_and_the_app(self):
+        import plistlib
+        nested='Contents/Resources/resources/v2/bin/OMD Sign-In.app'
+        def rows(minimum):
+            return [m.component(thin(),'Contents/MacOS/app','arm64'),m.component(thin(minimum=minimum),nested+'/Contents/MacOS/omd-signin','arm64')]
+        with tempfile.TemporaryDirectory() as folder:
+            app=Path(folder)/'Fixture.app';info=app/nested/'Contents/Info.plist';info.parent.mkdir(parents=True)
+            def declare(**values): info.write_bytes(plistlib.dumps({'CFBundleExecutable':'omd-signin','LSMinimumSystemVersion':'11.0',**values}))
+            declare()
+            self.assertEqual(m.nested_bundles(app,rows(0x000b0000),'13.5'),[{'path':nested,'declared':'11.0','required':'11.0.0','pass':True}])
+            self.assertFalse(m.nested_bundles(app,rows(0x000c0000),'13.5')[0]['pass'])
+            declare(LSMinimumSystemVersion='14.0')
+            self.assertFalse(m.nested_bundles(app,rows(0x000b0000),'13.5')[0]['pass'])
+            for values in ({'LSMinimumSystemVersion':'eleven'},{'LSMinimumSystemVersionByArchitecture':{'arm64':'11.0'}},{'CFBundleExecutable':'other'}):
+                declare(**values)
+                with self.assertRaises(ValueError): m.nested_bundles(app,rows(0x000b0000),'13.5')
+            info.unlink()
+            self.assertEqual(m.nested_bundles(app,rows(0x000b0000),'13.5'),[])
 
 if __name__=='__main__': unittest.main()

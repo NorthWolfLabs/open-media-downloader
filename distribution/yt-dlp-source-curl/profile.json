@@ -1,6 +1,6 @@
 {
   "schema": "omd-ytdlp-source-profile-v2",
-  "id": "omd-ytdlp-source-2026.08.19-curl-cffi-0.16.0-cpython-3.13.14-macos-arm64-v1",
+  "id": "omd-ytdlp-source-2026.10.26-curl-cffi-0.17.0-cpython-3.13.14-macos-arm64-v1",
   "status": "prototype",
   "release_accepted": false,
   "promotable": false,
@@ -11,9 +11,9 @@
   },
   "extractor": {
     "name": "omd-yt-dlp",
-    "version": "2026.08.19",
+    "version": "2026.10.26",
     "package": "yt-dlp",
-    "package_version": "2026.8.19",
+    "package_version": "2026.10.26",
     "extras": [
       "curl-cffi",
       "default",
@@ -28,7 +28,7 @@
   },
   "launcher": "distribution/yt-dlp-source/launcher.py",
   "logical_prefix": "/opt/omd-ytdlp-source",
-  "source_date_epoch": 1787097600,
+  "source_date_epoch": 1792972800,
   "jobs": 4,
   "inputs": [
     {
@@ -108,33 +108,33 @@
       "kind": "sdist",
       "role": "shipped-source",
       "package": "yt-dlp",
-      "version": "2026.8.19",
-      "file": "yt_dlp-2026.8.19.tar.gz",
-      "url": "https://files.pythonhosted.org/packages/1e/e0/832fa4ca334b766a06933a196066edc3dba37cdb6f14cd98d59bcc69a4b4/yt_dlp-2026.8.19.tar.gz",
-      "sha256": "9e213e48cea35c66b378e4447903f118f6392a5fa380a2b6d7070ec86f4e0af1",
-      "bytes": 3052025
+      "version": "2026.10.26",
+      "file": "yt_dlp-2026.10.26.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/83/31/4be3987022a6244550ab6a3afe45ad10ac10b5e5ab8874bd8eecc7f8b937/yt_dlp-2026.10.26.tar.gz",
+      "sha256": "abe5c6b94c3b2f0560500add1c42e0a97641752743a5b65588ac2007a6e23eb6",
+      "bytes": 3048880
     },
     {
       "id": "sdist:brotli",
       "kind": "sdist",
       "role": "shipped-source",
       "package": "brotli",
-      "version": "1.2.0",
-      "file": "brotli-1.2.0.tar.gz",
-      "url": "https://files.pythonhosted.org/packages/f7/16/c92ca344d646e71a43b8bb353f0a6490d7f6e06210f8554c8f874e454285/brotli-1.2.0.tar.gz",
-      "sha256": "e310f77e41941c13340a95976fe66a8a95b01e783d430eeaf7a2f87e0a57dd0a",
-      "bytes": 7388632
+      "version": "1.2.1",
+      "file": "brotli-1.2.1.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/cf/81/1546c983678a9b4e77cb4718eaedd1b2caf24a6cdbf1eb8775938d22aff7/brotli-1.2.1.tar.gz",
+      "sha256": "02b2f7b5a83485efe448a44ddf7983def05c3bb1dcf917d4f7154070260e13de",
+      "bytes": 7389447
     },
     {
       "id": "sdist:certifi",
       "kind": "sdist",
       "role": "shipped-source",
       "package": "certifi",
-      "version": "2026.7.22",
-      "file": "certifi-2026.7.22.tar.gz",
-      "url": "https://files.pythonhosted.org/packages/a3/c2/24167ea9858356b47a87a50d39908bfdb72ceeefe0041586e704e5376b3a/certifi-2026.7.22.tar.gz",
-      "sha256": "741e2c3b351ddf169a738da9f2c048608ff7f2c5cc02f1ebc6b118bb090d5d55",
-      "bytes": 138112
+      "version": "2026.10.23",
+      "file": "certifi-2026.10.23.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/fd/11/b524cbd9bbdaca58608e4cf4053fd463417549e1959fa8d3aa18319f9555/certifi-2026.10.23.tar.gz",
+      "sha256": "a9895e6e2758b371e0545e321a3a8fd1fcfd9829ada8824a936dfb16aaaf36cd",
+      "bytes": 136225
     },
     {
       "id": "sdist:charset-normalizer",
@@ -229,11 +229,11 @@
       "kind": "sdist",
       "role": "shipped-source",
       "package": "pycparser",
-      "version": "3.0",
-      "file": "pycparser-3.0.tar.gz",
-      "url": "https://files.pythonhosted.org/packages/1b/7d/92392ff7815c21062bea51aa7b87d45576f649f16458d78b7cf94b9ab2e6/pycparser-3.0.tar.gz",
-      "sha256": "600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29",
-      "bytes": 103492
+      "version": "3.11",
+      "file": "pycparser-3.11.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/da/a8/c5fdbeee588bb8ada9458774f43adf1bdd30bd59157055142183e769a024/pycparser-3.11.tar.gz",
+      "sha256": "d875f09c3507d00e1aba0eecc6dcadc1352f30fff09dc6bff2f1c2935e97c2bc",
+      "bytes": 113796
     },
     {
       "id": "sdist:cffi",
@@ -251,24 +251,24 @@
       "kind": "sdist",
       "role": "shipped-source",
       "package": "curl-cffi",
-      "version": "0.16.0",
-      "file": "curl_cffi-0.16.0.tar.gz",
-      "url": "https://files.pythonhosted.org/packages/b4/23/d32e113b16dbfb458bea408871ed98dd12f306a366a04215e84537e0af7e/curl_cffi-0.16.0.tar.gz",
-      "sha256": "b00b423da8028eb6221e3b63bcd63d681150c07cee8b16000d1f7ea292731895",
-      "bytes": 238344,
-      "upstream_check": "PyPI sdist sha256; yt-dlp 2026.08.19 [pin-curl-cffi] pins 0.16.0"
+      "version": "0.17.0",
+      "file": "curl_cffi-0.17.0.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/96/4c/69074f9797d83a5401b3c6bc58c5de5aad6d1a085d0497b87a093a152e87/curl_cffi-0.17.0.tar.gz",
+      "sha256": "31ee8500d06d6502ce1ec0b7ded1c5aa8e8f3401bbe37ccd78d6153d859d8f3c",
+      "bytes": 282294,
+      "upstream_check": "PyPI sdist sha256; yt-dlp 2026.10.26 [pin-curl-cffi] pins 0.17.0"
     },
     {
       "id": "curl-impersonate",
       "kind": "curl-recipe",
       "role": "shipped-source",
       "package": "curl-impersonate",
-      "version": "2.0.0",
-      "file": "ec41b71ce888806bfec56ada7a7258d333eb3d19.tar.gz",
-      "url": "https://github.com/lexiforest/curl-impersonate/archive/ec41b71ce888806bfec56ada7a7258d333eb3d19.tar.gz",
-      "sha256": "9f64512f18dc8b9ce0d95f0ea9588065e69048456e53817506a0241a13798cd7",
-      "bytes": 207810,
-      "upstream_check": "tag v2.0.0 commit (the version curl_cffi 0.16.0 scripts/build.py pins); git tree bafb817dd49eb48633da78b7f4387c3695e2e18f recomputed from the archive equals the commit tree"
+      "version": "2.3.1",
+      "file": "98de20ee6b6ca6f755d59bc502f819079a3c94ac.tar.gz",
+      "url": "https://github.com/lexiforest/curl-impersonate/archive/98de20ee6b6ca6f755d59bc502f819079a3c94ac.tar.gz",
+      "sha256": "3a159228fcde3925e6266373460b294d00b6ee9c7709b02d024a81ec1f41ebaf",
+      "bytes": 268232,
+      "upstream_check": "tag v2.3.1 commit (the version curl_cffi 0.17.0 scripts/build.py pins); git tree 0907612541545f28d21f7146db819efdd459d0cc recomputed from the archive equals the commit tree"
     },
     {
       "id": "curl:zlib",
@@ -280,7 +280,7 @@
       "url": "https://github.com/madler/zlib/releases/download/v1.3.1/zlib-1.3.1.tar.gz",
       "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
       "bytes": 1512791,
-      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.0.0 CMakeLists.txt"
+      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.3.1 CMakeLists.txt"
     },
     {
       "id": "curl:zstd",
@@ -292,19 +292,19 @@
       "url": "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz",
       "sha256": "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3",
       "bytes": 2434947,
-      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.0.0 CMakeLists.txt"
+      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.3.1 CMakeLists.txt"
     },
     {
       "id": "curl:brotli",
       "kind": "curl-dep",
       "role": "shipped-source",
       "package": "brotli",
-      "version": "1.2.0",
-      "file": "v1.2.0.tar.gz",
-      "url": "https://github.com/google/brotli/archive/refs/tags/v1.2.0.tar.gz",
-      "sha256": "816c96e8e8f193b40151dad7e8ff37b1221d019dbcb9c35cd3fadbfe6477dfec",
-      "bytes": 646315,
-      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.0.0 CMakeLists.txt"
+      "version": "1.2.1",
+      "file": "v1.2.1.tar.gz",
+      "url": "https://github.com/google/brotli/archive/refs/tags/v1.2.1.tar.gz",
+      "sha256": "98d35d11a78dc453aebb7d10c3748f3f73ff78c8267c0dc697b8631f67bf7e8f",
+      "bytes": 646598,
+      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.3.1 CMakeLists.txt"
     },
     {
       "id": "curl:boringssl",
@@ -316,7 +316,7 @@
       "url": "https://github.com/google/boringssl/archive/156c7b75ae9b8c3b3f847acf264f17594c3859fb.zip",
       "sha256": "450e169b284697c6eafe523cb7679f4221fbe1a0993f773a566c33b188762844",
       "bytes": 80313844,
-      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.0.0 CMakeLists.txt"
+      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.3.1 CMakeLists.txt"
     },
     {
       "id": "curl:nghttp2",
@@ -328,7 +328,7 @@
       "url": "https://github.com/nghttp2/nghttp2/releases/download/v1.63.0/nghttp2-1.63.0.tar.bz2",
       "sha256": "607b174554d22a828bc532d1d734fe0f729b5d5ed207f2f12e96a62e83f29c55",
       "bytes": 2012107,
-      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.0.0 CMakeLists.txt"
+      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.3.1 CMakeLists.txt"
     },
     {
       "id": "curl:nghttp3",
@@ -340,7 +340,7 @@
       "url": "https://github.com/ngtcp2/nghttp3/releases/download/v1.15.0/nghttp3-1.15.0.tar.bz2",
       "sha256": "c6c491a52804814098e446630e6efc459afc0d3da7952ffe6cbdc0b3f99b2b62",
       "bytes": 519681,
-      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.0.0 CMakeLists.txt"
+      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.3.1 CMakeLists.txt"
     },
     {
       "id": "curl:ngtcp2",
@@ -352,19 +352,31 @@
       "url": "https://github.com/ngtcp2/ngtcp2/releases/download/v1.20.0/ngtcp2-1.20.0.tar.bz2",
       "sha256": "871ec97ad86803cf312901b0c393b0ee70163e25a87c9b2894d1234341ce4e97",
       "bytes": 898205,
-      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.0.0 CMakeLists.txt"
+      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.3.1 CMakeLists.txt"
+    },
+    {
+      "id": "curl:cares",
+      "kind": "curl-dep",
+      "role": "shipped-source",
+      "package": "c-ares",
+      "version": "1.34.9",
+      "file": "c-ares-1.34.9.tar.gz",
+      "url": "https://github.com/c-ares/c-ares/releases/download/v1.34.9/c-ares-1.34.9.tar.gz",
+      "sha256": "9364b70a12eb59a06830fb488d9357f90100dff0d98b23ea3593a183d43e6f2f",
+      "bytes": 1083895,
+      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.3.1 CMakeLists.txt; GitHub release asset digest agrees"
     },
     {
       "id": "curl:curl",
       "kind": "curl-dep",
       "role": "shipped-source",
       "package": "curl",
-      "version": "8.21.0",
-      "file": "curl-8_21_0.tar.gz",
-      "url": "https://github.com/curl/curl/archive/curl-8_21_0.tar.gz",
-      "sha256": "ec753aa6f408a3ca9f0d6d5f7a77417aecd1544db13c03ae5d443612bf367364",
-      "bytes": 3592963,
-      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.0.0 CMakeLists.txt"
+      "version": "8.23.0",
+      "file": "curl-8_23_0.tar.gz",
+      "url": "https://github.com/curl/curl/archive/curl-8_23_0.tar.gz",
+      "sha256": "d0605d5883124ef5ae64c6d2b307e1417c482b362583b57491fdf37d9a99a792",
+      "bytes": 3750602,
+      "upstream_check": "URL and URL_HASH pinned by the curl-impersonate v2.3.1 CMakeLists.txt"
     },
     {
       "id": "sdist:altgraph",
@@ -456,6 +468,18 @@
       "sha256": "974d6b2f4eeefa25625d34da3cb36bdcebe7fbce40f4c16ac0835fd1c0cbae17",
       "bytes": 292385,
       "upstream_check": "git tree 70dd1324a3997a3ce38bfe70a8291b2ef4a0bf65 recomputed from the archive equals tag v1.13.2 (commit 3441b633c2fe2c494e958780ba0f4227b1327634)"
+    },
+    {
+      "id": "tool:pkgconf",
+      "kind": "tool-source",
+      "role": "build-tool",
+      "package": "pkgconf",
+      "version": "3.0.6",
+      "file": "pkgconf-3.0.6.tar.gz",
+      "url": "https://distfiles.ariadne.space/pkgconf/pkgconf-3.0.6.tar.gz",
+      "sha256": "01da06de506241a124faa7ba0a34b5ad549b49df8d280337d42d00e78ac37d5d",
+      "bytes": 625431,
+      "upstream_check": "release tarball from the official distfiles; the GitHub release asset pkgconf-3.0.6.tar.gz has the same bytes and digest; newest stable pkgconf before the 2026-08-27 build-tool cutoff"
     },
     {
       "id": "tool:flit-core",
@@ -658,6 +682,41 @@
       "products": [
         "bin/ninja"
       ]
+    },
+    {
+      "id": "pkgconf",
+      "input": "tool:pkgconf",
+      "official_recipe": "pkgconf 3.0.6 README.md autotools route (./configure && make && make install, the shipped configure; no autoreconf) with the custom-prefix system directories the README recommends, static libpkgconf only; the pkg-config name is the symlink the README leaves to the installer (ln -sf pkgconf pkg-config). Installed under its own prefix so that only the release pkg-config step and the curl_cffi build see it.",
+      "steps": [
+        [
+          "./configure",
+          "--prefix={tools}/pkgconf",
+          "--disable-shared",
+          "--enable-static",
+          "--with-system-libdir=/usr/lib",
+          "--with-system-includedir=/usr/include"
+        ],
+        [
+          "make",
+          "-j{jobs}"
+        ],
+        [
+          "make",
+          "install"
+        ],
+        [
+          "/bin/ln",
+          "-s",
+          "pkgconf",
+          "{tools}/pkgconf/bin/pkg-config"
+        ]
+      ],
+      "products": [
+        "pkgconf/bin/pkgconf"
+      ],
+      "links": {
+        "pkgconf/bin/pkg-config": "pkgconf"
+      }
     }
   ],
   "native": [
@@ -786,13 +845,17 @@
   ],
   "impersonate": {
     "input": "curl-impersonate",
-    "official_recipe": "curl-impersonate v2.0.0 (commit ec41b71) CMakeLists.txt superbuild, run as its Makefile configure/build/install targets and the .github/workflows/build.yml macOS arm64 job (cmake -G Ninja, then \"Create tar release files\": libtool -static of libcurl-impersonate.a with the eleven dependency archives). Deviations: CMAKE_OSX_DEPLOYMENT_TARGET 13.5 instead of the CI 11.0; SUBJOBS 4 with one top-level job; every dependency archive pre-staged by digest at its ExternalProject download path with networking denied; plain install instead of install-strip (the recipe installs through install(PROGRAMS/DIRECTORY), which strip nothing); headers copied beside the archive as the release tarball lays them out; CFLAGS/CXXFLAGS add only -ffile-prefix-map so that compiled-in source paths (BoringSSL error __FILE__ strings) are recorded relative to the dependency source directory instead of the absolute build directory.",
+    "official_recipe": "curl-impersonate v2.3.1 (commit 98de20e) CMakeLists.txt superbuild, run as its Makefile configure/build/install targets and the .github/workflows/build.yml macOS arm64 job (cmake -G Ninja, then \"Create tar release files\": cmake -P cmake/ReleasePkgConfig.cmake with pkg-config to write the release libcurl-impersonate.pc, and libtool -static of libcurl-impersonate.a with the twelve dependency archives). Deviations: CMAKE_OSX_DEPLOYMENT_TARGET 13.5 instead of the CI 11.0; SUBJOBS 4 with one top-level job; CURL_IMPERSONATE_VERSION=2.3.1 passed explicitly (the CI derives the same value from the checked-out v2.3.1 tag with git, which an archive build has not); every dependency archive pre-staged by digest at its ExternalProject download path with networking denied; plain install instead of install-strip (the release archive is merged from the unstripped build archives as in the CI); headers copied beside the archive as the release tarball lays them out; pkg-config is the source-built pkgconf 3.0.6 (the CI installs pkg-config with Homebrew, which provides pkgconf), passed to ReleasePkgConfig.cmake as PKG_CONFIG and kept off the superbuild PATH; the license collection (CollectLicenses.cmake) is not run because the kit carries every archive and its license files; CFLAGS/CXXFLAGS add only -ffile-prefix-map so that compiled-in source paths (BoringSSL error __FILE__ strings) are recorded relative to the dependency source directory instead of the absolute build directory.",
     "recipe_files": {
-      "CMakeLists.txt": "925b124f13fd6e80c410da00c3c71ae23051fae3e11fc40060def0efd91db32f",
+      "CMakeLists.txt": "dc1992ff7577938225e1a5719a095a069bc23f0c43467a6a6da0532570c11be7",
       "cmake/CheckFileContains.cmake": "bb4614f762ec9e44dbbdc6fd64610a9773d00e2959a8df2eef3d5d76bd76c70f",
+      "cmake/CollectLicenses.cmake.in": "5f0cfeae3e10ba47b238e007dd45785903ffd2d9929f0d64e1039cb564f24dae",
+      "cmake/PrepareInstallMetadata.cmake.in": "80bbf2088f06dac117f2daa5ecd31460116ff8d93f8bf5e2e17a017eff90b664",
+      "cmake/ReleasePkgConfig.cmake": "71c5c3276daebdc0b7914ed832fc823c3cfaee436c43ed6ea376934d1dae7171",
       "cmake/Uninstall.cmake.in": "2892d18f4b02fcd7f04d5afed9b3cd0f1a4f5eeb9b593d253d2a86fe2b6837c3",
-      ".github/workflows/build.yml": "cbd8e472ada491494d285ce4a744d27b5b043b80799c3cfd8d13e21c59885ae6",
-      "Makefile": "38530e8c51cf320f457a839b2321946cdbb6fdce5cc936bea630d94a5117b2f3",
+      "cmake/libcurl-impersonate.pc.in": "2ee8e84ab7b9125e49c11a8a54f1eda15fcac8e6e48fe95cf2ecd9d03256bd67",
+      ".github/workflows/build.yml": "c35a4b245140ac3751dd09ca8d9d3b6a8ed44101a5e12e0d50b852c6e9e00c0e",
+      "Makefile": "90728c470185bf81722547d9aeb87d99e0b0e028e4f7de029eced61908393b9f",
       "LICENSE": "c25fc35eb1692c95fa1406efca2f08cc14afda2c71d5cb1ae44da60358d1787b"
     },
     "dependencies": [
@@ -839,6 +902,12 @@
         "hash_variable": "NGTCP2_URL_HASH"
       },
       {
+        "input": "curl:cares",
+        "project": "cares",
+        "url_variable": "CARES_URL",
+        "hash_variable": "CARES_URL_HASH"
+      },
+      {
         "input": "curl:curl",
         "project": "curl",
         "url_variable": "CURL_URL",
@@ -846,15 +915,13 @@
       }
     ],
     "patches": {
-      "patches/boringssl.patch": "905078eeeaf4e258e26d7ee24af0ac1ae7769671da08fa0362b817d8196e7bcf",
+      "patches/boringssl.patch": "c8852fe2814b8f75d150af9c5c2edc6e2fc42b53b6329e2c01699377fe44c795",
       "patches/brotli.patch": "d59ec1994ae6285222f65dd7192c2cbcbc0d0ae6c85eb5fce1cae735010f4d4f",
-      "patches/curl.patch": "104945b7e8b69456714dacd19665173fb7896dca45490a9d9450edfe7bfb416b",
+      "patches/curl.patch": "2cc4d85163ab1c5d910f97b9c6d3d6488b1707e456855177cf0b9a84017753c3",
       "patches/nghttp3.patch": "f23395f2896a150910d7620044a0913b6179440326ce8c7f9e5ab93a30a615ac",
-      "patches/ngtcp2.patch": "2a2634adcc78b2c213ee25af4ce6682e01f5061843bc81ad753150decc42ad34"
+      "patches/ngtcp2.patch": "4974a62ab1810086b59265211ac8598ff1169a2cd2aa10ddc47120d247ce1168"
     },
-    "unused_patches": {
-      "patches/OpenBSD.patch": "ced8461d3a55d55801e12eed21ff03cac14c7db7d8d63c85c7bdb7be33857a4c"
-    },
+    "unused_patches": {},
     "environment": {
       "CFLAGS": "-ffile-prefix-map={superbuild}/deps/src/=",
       "CXXFLAGS": "-ffile-prefix-map={superbuild}/deps/src/="
@@ -870,7 +937,8 @@
         "Ninja",
         "-DCMAKE_INSTALL_PREFIX={impersonate}",
         "-DSUBJOBS={jobs}",
-        "-DCMAKE_OSX_DEPLOYMENT_TARGET={minimum}"
+        "-DCMAKE_OSX_DEPLOYMENT_TARGET={minimum}",
+        "-DCURL_IMPERSONATE_VERSION=2.3.1"
       ],
       [
         "{tools}/bin/cmake",
@@ -899,23 +967,47 @@
         "{superbuild}/deps/install/lib/libngtcp2.a",
         "{superbuild}/deps/install/lib/libngtcp2_crypto_boringssl.a",
         "{superbuild}/deps/install/lib/libssl.a",
-        "{superbuild}/deps/install/lib/libcrypto.a"
+        "{superbuild}/deps/install/lib/libcrypto.a",
+        "{superbuild}/deps/install/lib/libcares.a"
       ],
       "output": "{impersonate}/release/libcurl-impersonate.a",
-      "headers": "{impersonate}/include/curl"
+      "headers": "{impersonate}/include/curl",
+      "pkgconfig": {
+        "script": "cmake/ReleasePkgConfig.cmake",
+        "template": "cmake/libcurl-impersonate.pc.in",
+        "input": "{superbuild}/deps/build/curl/libcurl.pc",
+        "dependency_prefix": "{superbuild}/deps/install",
+        "output": "{impersonate}/release/libcurl-impersonate.pc",
+        "libs_private": [
+          "-framework",
+          "Security",
+          "-framework",
+          "CoreFoundation",
+          "-framework",
+          "CoreServices",
+          "-lresolv",
+          "-lc++",
+          "-licucore",
+          "-liconv",
+          "-lresolv",
+          "-lm"
+        ]
+      }
     },
     "check": {
       "binary": "bin/curl-impersonate",
       "version_components": [
-        "libcurl/8.21.0-IMPERSONATE",
+        "libcurl/8.23.0-IMPERSONATE",
         "BoringSSL",
         "zlib/1.3.1",
-        "brotli/1.2.0",
+        "brotli/1.2.1",
         "zstd/1.5.7",
+        "c-ares/1.34.9",
         "AppleIDN",
         "nghttp2/1.63.0",
         "ngtcp2/1.20.0",
-        "nghttp3/1.15.0"
+        "nghttp3/1.15.0",
+        "curl-impersonate/2.3.1"
       ],
       "features": [
         "alt-svc",
@@ -932,6 +1024,7 @@
         "IPv6",
         "Largefile",
         "libz",
+        "proxy-HTTP3",
         "SSL",
         "SSLS-EXPORT",
         "threadsafe",
@@ -947,24 +1040,26 @@
       ],
       "environment": {
         "IMPERSONATE_BUILD_DIR": "{impersonate}/release",
-        "LDFLAGS": "-Wl,-S -framework CoreFoundation -framework Security -framework SystemConfiguration -liconv -licucore"
+        "LDFLAGS": "-Wl,-S"
       },
       "native": "curl_cffi/_wrapper.abi3.so",
       "linked": [
-        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
         "/System/Library/Frameworks/Security.framework/Versions/A/Security",
-        "/System/Library/Frameworks/SystemConfiguration.framework/Versions/A/SystemConfiguration",
-        "/usr/lib/libiconv.2.dylib",
-        "/usr/lib/libicucore.A.dylib",
+        "/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation",
+        "/System/Library/Frameworks/CoreServices.framework/Versions/A/CoreServices",
+        "/usr/lib/libresolv.9.dylib",
         "/usr/lib/libc++.1.dylib",
+        "/usr/lib/libicucore.A.dylib",
+        "/usr/lib/libiconv.2.dylib",
         "/usr/lib/libSystem.B.dylib"
       ],
       "lookup_prefixes": [
         "_Py",
         "__Py"
       ],
-      "curl_version": "libcurl/8.21.0-IMPERSONATE BoringSSL zlib/1.3.1 brotli/1.2.0 zstd/1.5.7 AppleIDN nghttp2/1.63.0 ngtcp2/1.20.0 nghttp3/1.15.0"
-    }
+      "curl_version": "libcurl/8.23.0-IMPERSONATE BoringSSL zlib/1.3.1 brotli/1.2.1 zstd/1.5.7 c-ares/1.34.9 AppleIDN nghttp2/1.63.0 ngtcp2/1.20.0 nghttp3/1.15.0 curl-impersonate/2.3.1"
+    },
+    "pkg_config": "{tools}/pkgconf/bin"
   },
   "cpython": {
     "input": "cpython",
@@ -1121,8 +1216,8 @@
     ]
   },
   "expected": {
-    "version": "2026.08.19",
-    "list_extractors_lines": 1752,
+    "version": "2026.10.26",
+    "list_extractors_lines": 1755,
     "ejs": {
       "yt_dlp_ejs/yt/solver/core.min.js": "18da6ce0758b416e7ae645084f4f8801f9f9d59d6c477c05eaa0ff94ebd8cc00",
       "yt_dlp_ejs/yt/solver/lib.min.js": "c55987fe697e5b9ee18830163f7af85327e9bb5c3e674b969d38c8d205eaa577"
@@ -1138,9 +1233,9 @@
     ],
     "optional_libraries": [
       "Cryptodome-3.23.0",
-      "brotli-1.2.0",
-      "certifi-2026.07.22",
-      "curl_cffi-0.16.0",
+      "brotli-1.2.1",
+      "certifi-2026.10.23",
+      "curl_cffi-0.17.0",
       "mutagen-1.48.1",
       "requests-2.34.2",
       "sqlite3-3.50.4",
@@ -1172,6 +1267,10 @@
       [
         "Safari-26.0",
         "Ios-26.0"
+      ],
+      [
+        "Safari-27.0",
+        "Ios-27.0"
       ],
       [
         "Chrome-99",
@@ -1210,6 +1309,18 @@
         "Macos-26"
       ],
       [
+        "Firefox-153",
+        "Windows-10"
+      ],
+      [
+        "Firefox-154",
+        "Windows-10"
+      ],
+      [
+        "Firefox-155",
+        "Windows-10"
+      ],
+      [
         "Safari-15.3",
         "Macos-11"
       ],
@@ -1236,6 +1347,10 @@
       [
         "Safari-26.0.1",
         "Macos-26"
+      ],
+      [
+        "Safari-27.0",
+        "Macos-27"
       ],
       [
         "Chrome-99",
@@ -1296,6 +1411,26 @@
       [
         "Chrome-146",
         "Macos-26"
+      ],
+      [
+        "Chrome-150",
+        "Macos-26"
+      ],
+      [
+        "Chrome-151",
+        "Macos-26"
+      ],
+      [
+        "Chrome-151",
+        "Windows-10"
+      ],
+      [
+        "Chrome-152",
+        "Macos-26"
+      ],
+      [
+        "Chrome-152",
+        "Windows-10"
       ]
     ],
     "fixture": [

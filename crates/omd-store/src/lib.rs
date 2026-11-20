@@ -953,6 +953,18 @@ impl Store {
         tx.commit().await?;
         Ok(())
     }
+    /// Whether a download is running, or queued where the job runner can
+    /// claim it. A job queued behind a destination's storage operation waits
+    /// for that operation, which may itself wait for a person to start it.
+    pub async fn has_unfinished_downloads(&self) -> Result<bool> {
+        Ok(sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM jobs j JOIN destinations d ON d.id=j.destination_id \
+             WHERE j.state IN ('resolving','transferring','verifying','publishing') \
+             OR (j.state='queued' AND d.storage_operation IS NULL))",
+        )
+        .fetch_one(&self.pool)
+        .await?)
+    }
     pub async fn recover(&self) -> Result<()> {
         let mut tx = self.pool.begin().await?;
         sqlx::query("UPDATE jobs SET state='queued',updated_at=? WHERE state IN ('resolving','transferring','verifying','publishing')").bind(now()).execute(&mut *tx).await?;
@@ -2113,6 +2125,49 @@ mod tests {
             store.jobs("", None, None, 100).await.unwrap().items.len(),
             2
         );
+    }
+    #[tokio::test]
+    async fn unfinished_downloads_cover_claimable_and_running_jobs_only() {
+        let root = tempfile::tempdir().unwrap();
+        let store = Store::open(&root.path().join("db")).await.unwrap();
+        let dest = store.add_destination("Files", root.path()).await.unwrap();
+        assert!(!store.has_unfinished_downloads().await.unwrap());
+        let (job, _) = store
+            .enqueue(&plan(), &dest.id, "one", "one", None)
+            .await
+            .unwrap();
+        assert!(store.has_unfinished_downloads().await.unwrap());
+        // A storage operation holds the queued job back; it is not claimable.
+        sqlx::query("UPDATE destinations SET storage_operation='op' WHERE id=?")
+            .bind(&dest.id)
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        assert!(!store.has_unfinished_downloads().await.unwrap());
+        sqlx::query("UPDATE destinations SET storage_operation=NULL WHERE id=?")
+            .bind(&dest.id)
+            .execute(&store.pool)
+            .await
+            .unwrap();
+        assert_eq!(store.claim().await.unwrap().unwrap().id, job.id);
+        assert!(store.has_unfinished_downloads().await.unwrap());
+        for state in ["verifying", "publishing"] {
+            store
+                .transition(&job.id, &["transferring", "verifying"], state, None)
+                .await
+                .unwrap();
+            assert!(store.has_unfinished_downloads().await.unwrap());
+        }
+        store
+            .transition(&job.id, &["publishing"], "paused", None)
+            .await
+            .unwrap();
+        assert!(!store.has_unfinished_downloads().await.unwrap());
+        store
+            .transition(&job.id, &["paused"], "failed", None)
+            .await
+            .unwrap();
+        assert!(!store.has_unfinished_downloads().await.unwrap());
     }
     #[tokio::test]
     async fn history_pagination_does_not_truncate_at_one_hundred() {

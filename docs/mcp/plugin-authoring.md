@@ -30,6 +30,13 @@ Expose useful filter schemas, stable namespaced references, opaque pagination,
 accurate media summaries, title/description/artwork metadata and clear errors.
 Use a source image only when it exists; clients can render media-specific fallbacks.
 A source with a single feed collection should expose its episodes as releases.
+If one release appears in several collections (search results, playlists, its
+own series), declare the `collection_hint` capability and read
+`input.collection_hint` in resolve: it names the collection the release was
+listed under. Undeclared sources never receive it. Return that collection while
+the release still belongs to it; declared sources' automatic subscription
+downloads also require the followed collection. Keep release IDs stable; never
+encode a collection into them.
 
 Request the smallest host/method grants needed, including redirects/media hosts.
 `source_hosts` routes links; it grants no network authority. The pure component has

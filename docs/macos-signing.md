@@ -16,7 +16,7 @@ uv run scripts/sign-macos.py inspect --app /abs/OMD.app --mode development-adhoc
   [--purpose distribution-candidate] [--materials-binding single-phase|two-phase] \
   --plan /abs/new/plan.json [--expected-inventory /abs/app-inventory.json] \
   [--receipts /abs/receipts.json] [--prepared-extractor /abs/yt-dlp_macos \
-   --prepared-extractor-sha256 HEX --prepared-extractor-version 2026.08.19 --prepared-extractor-arch arm64 \
+   --prepared-extractor-sha256 HEX --prepared-extractor-version 2026.10.26 --prepared-extractor-arch arm64 \
    [--prepared-extractor-report /abs/work/extractor-report.json --prepared-extractor-report-sha256 HEX
     [--prepared-extractor-source-evidence /abs/source-evidence.json --prepared-extractor-source-evidence-sha256 HEX
      --prepared-extractor-source-kit /abs/source-kit.tar.gz --prepared-extractor-source-bootloader /abs/run]]]
@@ -48,12 +48,19 @@ forbidden. Libraries get no entitlements and no runtime flag.
 | --- | --- | --- | --- |
 | desktop shell | `Contents/MacOS/<executable>` (outer seal) | none | Tauri: hardened runtime, no entitlements; WebKit JIT is out of process |
 | engine, CLI, guardian, notifier | `bin/…` | none | No JIT; guardian launches system `sandbox-exec` |
+| sign-in window | `bin/OMD Sign-In.app`, a nested app bundle whose code is `Contents/MacOS/omd-signin` | none | wry/tao window; WKWebView runs page JavaScript in WebKit's XPC services |
 | plugin worker | `bin/omd-plugin-worker-v2` | allow-unsigned-executable-memory | Wasmtime 45.0.3 publishes code with `mprotect` without `MAP_JIT` |
 | Node | `tools/node/node` | allow-jit | V8 `MAP_JIT` |
 | ffmpeg, ffprobe | `tools/…` | none | No JIT |
 | headless browser | `browser/content/browser/chrome-headless-shell` | allow-jit | Chromium 153 renderer/GPU helper entitlements |
 | browser libraries | four exact `browser/content/browser/*.dylib` | none (library) | Loaded with `dlopen`; must share the host Team ID |
 | yt-dlp | `tools/yt_dlp/yt-dlp_macos` | none | PyInstaller onefile; see below |
+
+The sign-in window role (`filetype: app-bundle`, `sign: nested-bundle`) admits exactly the
+bundle `scripts/package-runtime.py` assembles: `Contents/Info.plist`, `Contents/MacOS/omd-signin`
+and `Contents/Resources/AppIcon.icns`, with the identifier `labs.northwolf.omd.signin`.
+The policy loader refuses any other nested bundle layout. (`app-bundle` avoids confusion
+with the Mach-O `MH_BUNDLE` type, which the signer reports as `bundle`.)
 
 An ad-hoc hardened-runtime probe of the actual release worker and Node 24.20.0
 confirmed this: the worker is killed when executing provider code with no
@@ -71,9 +78,23 @@ and missing release-worker markers. It reuses `check-macos-payload.py` for the
 whole-payload macOS minimum, the shared path primitives and the native receipt
 validator. `--expected-inventory` additionally requires exact whole-app identity.
 
-The plan lists every code object with its role, order (libraries, executables,
-then the outer bundle), identifier, entitlements, architectures, minimum, source
-identity and producer signature. Producer signatures are retained provenance only:
+The plan lists every code object with its role, order (libraries, executables and
+nested bundles, then the outer bundle), identifier, entitlements, architectures, minimum,
+source identity and producer signature.
+
+A nested app bundle is inspected as a unit. It must hold exactly its reviewed members and
+no seal yet. Its Info.plist must be byte-for-byte the packager's canonical plist for the
+version and minimum it declares, and its icon a complete ICNS. A bare `bin/omd-signin`
+beside it is unrecognized code. Execution signs inside out: the bundle is signed once
+(`--options runtime`, its identifier, the mode's timestamp flag), which signs its main
+executable and seals its resources, before the outer seal. Signing the main executable
+separately would only be replaced by this step. The executable then gets the usual
+checks: identifier, flags, entitlements and a signature-only change. `codesign --verify
+--strict` checks the bundle. A static proof also confirms that the new
+`Contents/_CodeSignature/CodeResources` covers exactly the icon, and that every SHA-256
+code directory of the executable binds Info.plist (slot 1) and that seal (slot 3). The
+signer appends the new seal to the build inventory after the staged rows. The outer seal
+covers the nested bundle's files as resource data. Producer signatures are retained provenance only:
 for example Node's Developer ID signature carries get-task-allow and disabled
 library validation, so it is replaced. Source identities stay bound by materials
 and provenance; payload identities are what manifests, inventories and fresh
@@ -136,10 +157,10 @@ digest), as `universal2`, `arm64` or `x86_64` targets:
 
 ```sh
 uv run scripts/prepare-macos-extractor.py inspect --producer /abs/yt-dlp_macos --producer-sha256 HEX \
-  --version 2026.08.19 --target-arch universal2 --mode development-adhoc --identity - --plan /abs/new/plan.json
+  --version 2026.10.26 --target-arch universal2 --mode development-adhoc --identity - --plan /abs/new/plan.json
 uv run scripts/prepare-macos-extractor.py execute --plan /abs/new/plan.json --output /abs/new/yt-dlp_macos --work /abs/new/work
 uv run scripts/prepare-macos-extractor.py verify --producer … --producer-sha256 HEX --prepared … --prepared-sha256 HEX \
-  --version 2026.08.19 --target-arch universal2 --mode development-adhoc --output /abs/new/verification.json
+  --version 2026.10.26 --target-arch universal2 --mode development-adhoc --output /abs/new/verification.json
 uv run scripts/test-prepare-macos-extractor.py
 ```
 
@@ -195,11 +216,11 @@ never fall back to each other, and a plan or report cannot move between them.
 ```sh
 src=(--source-evidence /abs/source-evidence.json --source-evidence-sha256 HEX \
      --source-kit /abs/source-kit.tar.gz --source-bootloader /abs/run)
-uv run scripts/prepare-macos-extractor.py inspect --producer /abs/omd-yt-dlp --producer-sha256 HEX --version 2026.08.19 \
+uv run scripts/prepare-macos-extractor.py inspect --producer /abs/omd-yt-dlp --producer-sha256 HEX --version 2026.10.26 \
   --target-arch arm64 --mode development-adhoc --identity - --plan /abs/new/plan.json $src
 uv run scripts/prepare-macos-extractor.py execute --plan /abs/new/plan.json --output /abs/new/omd-yt-dlp --work /abs/new/work
 uv run scripts/prepare-macos-extractor.py verify --producer … --producer-sha256 HEX --prepared … --prepared-sha256 HEX \
-  --version 2026.08.19 --target-arch arm64 --mode development-adhoc --output /abs/new/verification.json $src
+  --version 2026.10.26 --target-arch arm64 --mode development-adhoc --output /abs/new/verification.json $src
 uv run scripts/test-prepare-macos-extractor-source.py
 ```
 
@@ -211,7 +232,7 @@ line. It holds digests only, no paths; unknown or missing fields are refused:
  "profile": {"file": "distribution/yt-dlp-source-curl/profile.json", "id": "PROFILE-ID", "sha256": "HEX"},
  "kit": {"bytes": 0, "sha256": "HEX"}, "plan_sha256": "HEX", "receipt_sha256": "HEX",
  "producer": {"bytes": 0, "sha256": "HEX"}, "bootloader": {"bytes": 0, "sha256": "HEX"},
- "version": "2026.08.19", "target_arch": "arm64", "release_accepted": false}
+ "version": "2026.10.26", "target_arch": "arm64", "release_accepted": false}
 ```
 
 Take the kit digest from the reviewed kit record and read the plan and receipt digests
@@ -397,7 +418,10 @@ corrupted copy). Purpose tests drive execution with a canned Developer ID runner
 signature evidence. Real Developer ID signing with secure timestamps is recorded
 separately for a private-validation copy; that maintainer evidence is not part of
 the public source.
-Notarization tests are separate (`test-notarized-materials.py`); quarantine and pristine-account installation are not exercised. Ad-hoc hardened processes cannot load ad-hoc libraries, so
+Notarization tests are separate (`test-notarized-materials.py`); quarantine and pristine-account installation are not exercised.
+The fixture app carries an ad-hoc signed nested sign-in bundle. Gatekeeper assessment
+(`spctl --assess --type execute`) of the helper inside a notarized app, and the launched
+window's identity under accessibility tools, are native release-round checks. Ad-hoc hardened processes cannot load ad-hoc libraries, so
 development rehearsals do not represent browser or extractor runtime behavior.
 Code inside `Contents/Resources` follows the current Tauri resource layout and is
 sealed as resource data; notarization acceptance of that layout remains unverified.

@@ -70,6 +70,30 @@ impl Store {
         tx.commit().await?;
         self.selection_task(&id).await
     }
+    /// Ends reuse of the cached interactive enumerations of `collection` after
+    /// the source changed a release they list (`selection_changed`), so an
+    /// identical request enumerates again instead of getting the stale list
+    /// back for the rest of the fifteen minutes. Each stale snapshot expires
+    /// now: reading or preparing from it asks for a refresh, and one still
+    /// scanning finishes expired. Batches already copied their releases and
+    /// subscription scans are never reused, so neither is touched.
+    pub async fn invalidate_snapshots(&self, collection: &SourceRef) -> Result<u64> {
+        let mut tx = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let time = now();
+        let ids: Vec<String> = sqlx::query_scalar("SELECT id FROM selection_tasks WHERE kind='snapshot' AND state IN ('working','ready') AND json_extract(request_json,'$.reference.provider')=? AND json_extract(request_json,'$.reference.id')=? AND (expires_at IS NULL OR expires_at>?) AND NOT EXISTS(SELECT 1 FROM subscription_scans WHERE snapshot_id=selection_tasks.id)")
+            .bind(&collection.provider).bind(&collection.id).bind(&time).fetch_all(&mut *tx).await?;
+        for id in &ids {
+            sqlx::query("UPDATE selection_tasks SET expires_at=?,updated_at=? WHERE id=?")
+                .bind(&time)
+                .bind(&time)
+                .bind(id)
+                .execute(&mut *tx)
+                .await?;
+            emit(&mut tx, "selections.changed", id).await?;
+        }
+        tx.commit().await?;
+        Ok(ids.len() as u64)
+    }
     pub async fn selection_task(&self, id: &str) -> Result<SelectionTask> {
         let mut selection = task(
             sqlx::query("SELECT * FROM selection_tasks WHERE id=?")
@@ -182,7 +206,9 @@ impl Store {
         let expires = page.next_cursor.is_none().then(|| {
             (Utc::now() + chrono::Duration::hours(24)).to_rfc3339_opts(SecondsFormat::Millis, true)
         });
-        sqlx::query("UPDATE selection_tasks SET state=?,cursor=?,processed=?,total=?,expires_at=?,updated_at=? WHERE id=?")
+        // An expiry set while the scan was still working means its collection
+        // was invalidated (`invalidate_snapshots`); finishing keeps it.
+        sqlx::query("UPDATE selection_tasks SET state=?,cursor=?,processed=?,total=?,expires_at=COALESCE(expires_at,?),updated_at=? WHERE id=?")
             .bind(if page.next_cursor.is_some(){"working"}else{"ready"}).bind(&page.next_cursor).bind(count).bind(count).bind(expires).bind(now()).bind(&expected.id).execute(&mut *tx).await?;
         if let Some(subscription) = sqlx::query_scalar::<_, String>(
             "SELECT subscription_id FROM subscription_scans WHERE snapshot_id=?",
@@ -480,6 +506,65 @@ mod tests {
         assert_ne!(
             fresh.id,
             store.cached_snapshot(&request, "v1").await.unwrap().id
+        );
+    }
+    #[tokio::test]
+    async fn changed_selections_end_reuse_of_their_collection_enumerations() {
+        let root = tempfile::tempdir().unwrap();
+        let store = Store::open(&root.path().join("db")).await.unwrap();
+        let collection = release(0).collection;
+        let request = |profile: Option<&str>| json!({"reference":collection,"credential_profile":profile,"policy":{}});
+        let other = json!({"reference":{"provider":"fixture","id":"other"}});
+        let finish = async |task: &SelectionTask| {
+            let page = Page {
+                items: vec![release(0)],
+                next_cursor: None,
+            };
+            store.append_snapshot(task, &page).await.unwrap();
+        };
+        let ready = store.cached_snapshot(&request(None), "v1").await.unwrap();
+        finish(&ready).await;
+        let scanning = store
+            .cached_snapshot(&request(Some("account")), "v1")
+            .await
+            .unwrap();
+        let unrelated = store.cached_snapshot(&other, "v1").await.unwrap();
+        // A refresh within fifteen minutes reuses the cached enumeration.
+        assert_eq!(
+            store
+                .cached_snapshot(&request(None), "v1")
+                .await
+                .unwrap()
+                .id,
+            ready.id
+        );
+        assert_eq!(store.invalidate_snapshots(&collection).await.unwrap(), 2);
+        // The identical request now enumerates again.
+        let fresh = store.cached_snapshot(&request(None), "v1").await.unwrap();
+        assert_ne!(fresh.id, ready.id);
+        assert_eq!(fresh.state, "working");
+        // The stale list is not served any more.
+        assert!(matches!(
+            store.snapshot_page(&ready.id, "", -1, 10).await,
+            Err(StoreError::StateConflict)
+        ));
+        // A scan that was still running finishes expired, never reusable.
+        finish(&scanning).await;
+        let finished = store.selection_task(&scanning.id).await.unwrap();
+        assert_eq!(finished.state, "ready");
+        assert!(finished.expires_at.unwrap() <= now());
+        assert_ne!(
+            store
+                .cached_snapshot(&request(Some("account")), "v1")
+                .await
+                .unwrap()
+                .id,
+            scanning.id
+        );
+        // Other collections keep their cache.
+        assert_eq!(
+            store.cached_snapshot(&other, "v1").await.unwrap().id,
+            unrelated.id
         );
     }
     fn release(n: usize) -> Release {

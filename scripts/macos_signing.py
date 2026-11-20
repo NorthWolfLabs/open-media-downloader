@@ -26,6 +26,7 @@ from pathlib import Path
 import materials_contract
 import native_review
 import public_inputs
+import signin_bundle
 
 PLAN_SCHEMA = 'omd-macos-signing-plan-v1'
 REPORT_SCHEMA = 'omd-macos-signing-report-v1'
@@ -576,13 +577,19 @@ def load_policy(path=POLICY_PATH):
     need(not reviewed & forbidden, 'Policy entitlement lists overlap')
     paths = set()
     for role in policy['roles']:
-        need({'id', 'path', 'filetype', 'sign', 'entitlements', 'binding', 'basis'} <= set(role) <= {'id', 'path', 'filetype', 'sign', 'entitlements', 'binding', 'basis', 'receipt', 'marker', 'packed'}, 'Invalid signing role fields')
+        need({'id', 'path', 'filetype', 'sign', 'entitlements', 'binding', 'basis'} <= set(role) <= {'id', 'path', 'filetype', 'sign', 'entitlements', 'binding', 'basis', 'receipt', 'marker', 'packed', 'bundle'}, 'Invalid signing role fields')
         need(role['path'] not in paths, 'Duplicate signing role path')
         paths.add(role['path'])
-        need(role['filetype'] in ('execute', 'dylib') and role['sign'] in ('nested', 'outer-bundle', 'prepared-extractor'), 'Invalid signing role kind')
+        need(role['filetype'] in ('execute', 'dylib', 'app-bundle') and role['sign'] in ('nested', 'outer-bundle', 'prepared-extractor', 'nested-bundle'), 'Invalid signing role kind')
+        # A nested application bundle is exactly the reviewed sign-in window layout: one main
+        # executable, its Info.plist and its icon, signed as a bundle before the outer seal.
+        need((role['filetype'] == 'app-bundle') == (role['sign'] == 'nested-bundle') == ('bundle' in role), 'Invalid nested bundle role')
+        if 'bundle' in role:
+            need(role['path'].endswith('/' + signin_bundle.BUNDLE) and role['bundle'] == {'identifier': signin_bundle.IDENTIFIER, 'executable': signin_bundle.EXECUTABLE,
+                                                                                         'members': list(signin_bundle.MEMBERS)}, 'Unreviewed nested bundle layout')
         need(isinstance(role['entitlements'], dict) and all(v is True for v in role['entitlements'].values()), 'Entitlements must be explicit true values')
         need(set(role['entitlements']) <= reviewed, f"Unreviewed entitlement for {role['id']}")
-        need(role['filetype'] == 'execute' or not role['entitlements'], 'Libraries cannot carry entitlements')
+        need(role['filetype'] != 'dylib' or not role['entitlements'], 'Libraries cannot carry entitlements')
         need(isinstance(role['basis'], str) and role['basis'].strip(), 'Each role needs a reviewed basis')
     need(sum(r['sign'] == 'outer-bundle' for r in policy['roles']) == 1, 'Exactly one outer bundle role')
     return policy, {'path': 'distribution/macos-signing-policy.json', 'bytes': len(data), 'sha256': sha(data)}
@@ -590,6 +597,37 @@ def load_policy(path=POLICY_PATH):
 
 def expand(template, resources, executable):
     return template.replace('{resources}', resources).replace('{executable}', executable)
+
+
+def role_paths(policy, resources, executable):
+    """{logical path of each reviewed Mach-O: role}. A nested bundle's code object is its
+    main executable; the bundle directory is bundle_root() of that path."""
+    roles = {}
+    for role in policy['roles']:
+        path = expand(role['path'], resources, executable)
+        roles[path + '/' + role['bundle']['executable'] if role['filetype'] == 'app-bundle' else path] = role
+    return roles
+
+
+def bundle_root(role, path):
+    return path[:-len('/' + role['bundle']['executable'])]
+
+
+def hardened(role):
+    """Executables (including a nested bundle's main executable) get the hardened runtime."""
+    return role['filetype'] in ('execute', 'app-bundle')
+
+
+def macho_type(role):
+    return 'execute' if role['filetype'] == 'app-bundle' else role['filetype']
+
+
+def role_identifier(role, path, bundle_id):
+    if role['sign'] == 'outer-bundle':
+        return bundle_id
+    if role['filetype'] == 'app-bundle':
+        return role['bundle']['identifier']
+    return f"{bundle_id}.{role['id']}" + ('.' + path.rsplit('/', 1)[-1].removesuffix('.dylib') if role['id'] == 'browser-library' else '')
 
 
 # ---------------------------------------------------------------- inspection
@@ -802,13 +840,13 @@ def inspect(request, temp_root=None):
     inventory_bytes = files[prefix + 'build-inventory.json'].read_bytes()
     staged = {k: v for k, v in resource_files.items() if k != 'build-inventory.json'}
     inventory = check_build_inventory(inventory_bytes, staged, arch)
-    roles, bindings = {}, {}
-    for role in policy['roles']:
-        path = expand(role['path'], resources, executable)
-        roles[path] = role
+    roles, bindings = role_paths(policy, resources, executable), {}
+    for path, role in roles.items():
         rel = path[len(prefix):] if path.startswith(prefix) else None
         if role['binding'].startswith('tool:'):
             bindings[role['binding']] = rel
+    nested = {bundle_root(role, path): inspect_nested_bundle(role, bundle_root(role, path), files, identities)
+              for path, role in roles.items() if role['filetype'] == 'app-bundle'}
     tools = check_tools_manifest(files[prefix + 'tools/tools-v2.json'].read_bytes(), bindings, staged)
     browser = check_browser_manifest(files[prefix + 'browser/browser-tools-v2.json'].read_bytes(), tools, staged)
     declared = info['LSMinimumSystemVersion']
@@ -844,20 +882,22 @@ def inspect(request, temp_root=None):
             objects.append(entry)
             continue
         seen_roles.add(rel)
-        if role['filetype'] == 'execute':
+        if hardened(role):
             need(files[rel].stat().st_mode & 0o100, f'{rel}: reviewed executable lacks owner execute permission')
-        need(all(s['filetype'] == role['filetype'] for s in images), f"{rel}: Mach-O type differs from its reviewed role ({role['filetype']})")
+        need(all(s['filetype'] == macho_type(role) for s in images), f"{rel}: Mach-O type differs from its reviewed role ({macho_type(role)})")
         need(arch in entry['architectures'], f'{rel}: missing {arch} slice')
         if 'marker' in role:
             need(role['marker'].encode() in data, f"{rel}: required marker {role['marker']} is absent")
-        name = 'bin/' + rel.rsplit('/', 1)[-1] if role['binding'] == 'engine-bin' else None
-        identifier = bundle_id if role['sign'] == 'outer-bundle' else f"{bundle_id}.{role['id']}" + ('.' + rel.rsplit('/', 1)[-1].removesuffix('.dylib') if role['id'] == 'browser-library' else '')
-        entry.update(role=role['id'], filetype=role['filetype'], entitlements=role['entitlements'], identifier=identifier,
-                     hardened_runtime=role['filetype'] == 'execute', receipt=role.get('receipt'), basis=role['basis'],
-                     action={'nested': 'sign', 'outer-bundle': 'outer-bundle', 'prepared-extractor': 'prepared-extractor'}[role['sign']],
-                     rank={'dylib': 1, 'execute': 2}[role['filetype']] if role['sign'] != 'outer-bundle' else 3)
+        name = materials_contract.binary_name(rel[len(prefix):]) if role['binding'] == 'engine-bin' and rel.startswith(prefix) else None
+        need(role['binding'] != 'engine-bin' or name is not None, f'{rel}: not an engine binary path')
+        entry.update(role=role['id'], filetype=role['filetype'], entitlements=role['entitlements'], identifier=role_identifier(role, rel, bundle_id),
+                     hardened_runtime=hardened(role), receipt=role.get('receipt'), basis=role['basis'],
+                     action={'nested': 'sign', 'outer-bundle': 'outer-bundle', 'prepared-extractor': 'prepared-extractor', 'nested-bundle': 'sign-bundle'}[role['sign']],
+                     rank={'dylib': 1, 'execute': 2, 'app-bundle': 2}[role['filetype']] if role['sign'] != 'outer-bundle' else 3)
+        if role['filetype'] == 'app-bundle':
+            entry.update(bundle=bundle_root(role, rel), nested_bundle=nested[bundle_root(role, rel)])
         if name:
-            entry['receipt_binary'] = name[4:]
+            entry['receipt_binary'] = name
         if role.get('packed'):
             inventory_rows, members = packed_native_members(files[rel], arch)
             entry['packed'] = {'format': role['packed'], 'members': len(inventory_rows), **member_summary(members),
@@ -885,7 +925,7 @@ def inspect(request, temp_root=None):
               'Supply --prepared-extractor with an exact digest/version/architecture whose members carry the signing Team ID; development mode retains the producer bytes unchanged')
     for entry in objects:
         layout = entry['source']['signature_layout']
-        if entry.get('action') in ('sign', 'outer-bundle') and ('unsupported' in layout or not all(s['signed'] for s in layout['slices'])):
+        if entry.get('action') in ('sign', 'sign-bundle', 'outer-bundle') and ('unsupported' in layout or not all(s['signed'] for s in layout['slices'])):
             block('unsupported-code-layout', 'signing', entry['path'], 'Signature-only change cannot be proven: ' + layout.get('unsupported', 'an unsigned slice would gain new load commands'),
                   'Rebuild or repackage the object so every byte belongs to a slice or its existing code signature')
     if mode == 'developer-id' and inventory['staging_mode'] != 'release':
@@ -919,7 +959,8 @@ def inspect(request, temp_root=None):
         'checks': {'payload_minimum': {'pass': gate['pass'], 'required': gate['required'], 'declared': declared,
                                        'components': len(gate['components']), 'packed_components': sum('!/' in c['path'] for c in gate['components'])},
                    'public_resources': {'files': len(staged), 'plugins': 0, 'plugin_framed_files': 0, 'symlinks': 0},
-                   'managed_manifests': {'tools': sorted(tools), 'browser_files': len(browser['files'])}},
+                   'managed_manifests': {'tools': sorted(tools), 'browser_files': len(browser['files'])},
+                   'nested_bundles': nested},
         'code_objects': objects,
         'transformations': transformations(objects, prefix, receipts, mode, purpose),
         'receipts': receipts,
@@ -937,6 +978,25 @@ def inspect(request, temp_root=None):
     if expected := request.get('expected_inventory'):
         check_expected_inventory(expected, identities)
     return plan
+
+
+def inspect_nested_bundle(role, root, files, identities):
+    """A nested application bundle is exactly its reviewed members, unsigned (no seal yet),
+    with the packager's canonical Info.plist for its declared version and minimum."""
+    layout = role['bundle']
+    inside = sorted(rel[len(root) + 1:] for rel in identities if rel.startswith(root + '/'))
+    need(inside == sorted(layout['members']), f"{root}: the nested bundle must contain exactly {', '.join(layout['members'])}; found {', '.join(inside[:8]) or 'nothing'}")
+    data = files[root + '/' + signin_bundle.INFO].read_bytes()
+    try:
+        info = plistlib.loads(data)
+        canonical = signin_bundle.info_plist(info.get('CFBundleShortVersionString'), info.get('LSMinimumSystemVersion')) if isinstance(info, dict) else None
+    except Exception:  # plistlib raises several types; any unreadable plist is refused below
+        info, canonical = None, None
+    need(canonical is not None and data == canonical, f'{root}: Info.plist is not the canonical sign-in bundle Info.plist (identifier {layout["identifier"]})')
+    signin_bundle.check_icon(files[root + '/' + signin_bundle.ICON].read_bytes())
+    return {'identifier': info['CFBundleIdentifier'], 'executable': layout['executable'], 'version': info['CFBundleShortVersionString'],
+            'declared_minimum': info['LSMinimumSystemVersion'], 'members': {m: identities[root + '/' + m] for m in layout['members']},
+            'seal': signin_bundle.SEAL}
 
 
 def two_phase_initial(inventory, staged, files, prefix):
@@ -1066,7 +1126,7 @@ def inspect_receipts(request, staged, files, prefix, objects, arch, executable, 
         notices = files.get(prefix + 'third-party/native-NOTICES.txt')
         artifacts = receipt.get('artifacts') if isinstance(receipt.get('artifacts'), list) else []
         bound = {a.get('name'): a.get('sha256') for a in artifacts if isinstance(a, dict)}
-        current = {n: staged.get('bin/' + n, {}).get('sha256') for n in engine_names}
+        current = {n: staged.get(materials_contract.binary_path(n, TRIPLES[arch]), {}).get('sha256') for n in engine_names}
         status = {'identity': installed, 'binaries': receipt.get('binaries'), 'binds_input_bytes': all(bound.get(n) == current[n] for n in engine_names),
                   'after_signing': 'stale: binds pre-signature engine bytes'}
         try:
@@ -1097,7 +1157,8 @@ def inspect_receipts(request, staged, files, prefix, objects, arch, executable, 
         block('engine-receipt-selection', severity, 'receipts', f"Engine receipt selects {cfg['engine']['binaries']}; bundled engine binaries are {engine_names}", 'Select exactly the bundled engine binaries')
     if cfg['desktop']['binaries'] != [executable]:
         block('desktop-receipt-selection', severity, 'receipts', f"Desktop receipt selects {cfg['desktop']['binaries']}, not {executable}", 'Select the bundle executable')
-    for kind, artifacts in (('engine', [(n, files[prefix + 'bin/' + n]) for n in cfg['engine']['binaries'] if prefix + 'bin/' + n in files]),
+    installed = {n: prefix + materials_contract.binary_path(n, TRIPLES[arch]) for n in cfg['engine']['binaries']}
+    for kind, artifacts in (('engine', [(n, files[installed[n]]) for n in cfg['engine']['binaries'] if installed[n] in files]),
                             ('desktop', [(executable, files['Contents/MacOS/' + executable])])):
         try:
             check = receipt_scope_check(kind, cfg[kind], cfg['target'], artifacts, temp_root)
@@ -1124,9 +1185,12 @@ def transformations(objects, prefix, receipts, mode, purpose='distribution-candi
     incomplete = mode == 'development-adhoc' or purpose == 'private-validation'
     rows = []
     for o in objects:
-        if o.get('action') in ('sign', 'replace-and-sign'):
-            rows.append({'path': o['path'], 'kind': 'nested-signature' if o['action'] == 'sign' else 'prepared-replacement-signature',
-                         'note': 'Only the code signature, its dependent size fields and FAT slice placement may change' if o['action'] == 'sign' else 'Bytes replaced by the bound prepared extractor, then signed'})
+        if o.get('action') in ('sign', 'replace-and-sign', 'sign-bundle'):
+            rows.append({'path': o['path'], 'kind': 'nested-signature' if o['action'] != 'replace-and-sign' else 'prepared-replacement-signature',
+                         'note': 'Only the code signature, its dependent size fields and FAT slice placement may change' if o['action'] != 'replace-and-sign' else 'Bytes replaced by the bound prepared extractor, then signed'})
+        if o.get('action') == 'sign-bundle':
+            rows.append({'path': o['bundle'] + '/' + signin_bundle.SEAL, 'kind': 'nested-seal',
+                         'note': 'New file: the nested bundle seal over its resources; Info.plist and this seal are bound by the main executable code directory'})
     rows += [
         {'path': prefix + 'tools/tools-v2.json', 'kind': 'managed-manifest', 'note': 'sha256 values become post-signature payload digests; paths and versions unchanged'},
         {'path': prefix + 'browser/browser-tools-v2.json', 'kind': 'managed-manifest', 'note': 'node and signed browser file digests become post-signature; other files unchanged'},
@@ -1205,7 +1269,7 @@ def sign_argv(identity, mode, obj, entitlements_file, path):
 
 def verify_object(runner, plan, obj, path):
     """Verify actual signature, flags, identifier, team and entitlements."""
-    if obj['filetype'] == 'execute':
+    if obj['filetype'] in ('execute', 'app-bundle'):
         need(Path(path).stat().st_mode & 0o100, f"{obj['path']}: signed executable lacks owner execute permission")
     runner([CODESIGN, '--verify', '--strict', '--all-architectures', path], label='verify:' + obj['path'])
     shown = runner([CODESIGN, '--display', '--entitlements', '-', '--xml', path], label='entitlements:' + obj['path'])
@@ -1234,6 +1298,57 @@ def verify_object(runner, plan, obj, path):
             'signature_comparison': comparison, 'signature': producer_summary(signature(data))}
 
 
+def special_slots(data):
+    """Special-slot hashes {slot: hex} of every SHA-256 code directory in every slice."""
+    found = []
+    for off, length in slice_regions(data):
+        image = data[off:off + length]
+        endian, _, _, _, commands = load_commands(image)
+        at = [o for cmd, o, _ in commands if cmd == 0x1d]
+        need(len(at) == 1, 'Code object is not signed')
+        dataoff, datasize = struct.unpack_from(endian + 'II', image, at[0] + 8)
+        blob = image[dataoff:dataoff + datasize]
+        magic, total, count = struct.unpack_from('>III', blob, 0)
+        need(magic == 0xfade0cc0 and 12 + 8 * count <= total <= len(blob), 'Invalid code signature')
+        for i in range(count):
+            kind, offset = struct.unpack_from('>II', blob, 12 + 8 * i)
+            if kind == 0 or 0x1000 <= kind < 0x1005:
+                need(offset + 44 <= total, 'Invalid code directory')
+                cd_magic, cd_length, _, _, hash_offset, _, special, _, _, hash_size, hash_type = struct.unpack_from('>IIIIIIIIIBB', blob, offset)
+                need(cd_magic == 0xfade0c02 and offset + cd_length <= total, 'Invalid code directory')
+                directory = blob[offset:offset + cd_length]
+                if hash_type == 2 and hash_size == 32:
+                    need(hash_offset - special * 32 >= 0 and hash_offset <= len(directory), 'Invalid code directory special slots')
+                    found.append({k: directory[hash_offset - k * 32:hash_offset - (k - 1) * 32].hex() for k in range(1, special + 1)})
+    need(found, 'No SHA-256 code directory')
+    return found
+
+
+def nested_seal(bundle, layout):
+    """Static proof that a signed nested bundle binds its Info.plist (code directory slot 1)
+    and its seal (slot 3), and that the seal covers exactly its resource members."""
+    data = (bundle / signin_bundle.SEAL).read_bytes()
+    try:
+        seal = plistlib.loads(data)
+    except Exception as error:  # plistlib raises several types for malformed input
+        raise ValueError(f'{bundle.name}: invalid nested CodeResources seal: {error}') from error
+    resources = {m[len('Contents/'):]: (bundle / m).read_bytes() for m in layout['members'] if m not in (signin_bundle.INFO, layout['executable'])}
+    need(isinstance(seal, dict) and isinstance(seal.get('files2'), dict) and set(seal['files2']) == set(resources),
+         f'{bundle.name}: the nested seal does not cover exactly its resources')
+    for rel, row in seal['files2'].items():
+        need(isinstance(row, dict) and set(row) <= {'hash', 'hash2'} and isinstance(row.get('hash2'), bytes) and row['hash2'].hex() == sha(resources[rel])
+             and ('hash' not in row or row['hash'] == hashlib.sha1(resources[rel]).digest()), f'{bundle.name}: nested seal entry differs: {rel}')
+    info = sha((bundle / signin_bundle.INFO).read_bytes())
+    for slots in special_slots((bundle / layout['executable']).read_bytes()):
+        need(slots.get(1) == info and slots.get(3) == sha(data), f'{bundle.name}: the main executable does not bind Info.plist and the nested seal')
+    return {'path': signin_bundle.SEAL, 'bytes': len(data), 'sha256': sha(data), 'sealed_files': len(resources), 'info_plist_sha256': info}
+
+
+def verify_nested_bundle(runner, bundle, obj):
+    runner([CODESIGN, '--verify', '--strict', '--all-architectures', bundle], label='verify:' + obj['bundle'])
+    return nested_seal(bundle, {'executable': obj['nested_bundle']['executable'], 'members': sorted(obj['nested_bundle']['members'])})
+
+
 def resource_identities(resources):
     files, _ = walk_bundle(resources)
     return {rel: file_identity(path) for rel, path in files.items()}
@@ -1254,11 +1369,15 @@ def rewrite_manifests(resources, signed):
     return {'tools': {k: v['sha256'] for k, v in tools.items()}, 'browser_signed_files': sorted(r for r in browser['files'] if 'browser/content/' + r in signed)}
 
 
-def rewrite_inventory(resources, signing):
+def rewrite_inventory(resources, signing, added=()):
+    """Post-signature digests in the staged order; new nested bundle seals (`added`) follow
+    in sorted order. Nothing else may appear or disappear."""
     path = resources / 'build-inventory.json'
     inventory = json.loads(path.read_text())
     actual = {k: v for k, v in resource_identities(resources).items() if k != 'build-inventory.json'}
-    inventory['files'] = [{'path': row['path'], 'sha256': actual[row['path']]['sha256'], 'size': actual[row['path']]['bytes']} for row in inventory['files'] if row['path'] in actual]
+    rows = [{'path': row['path'], 'sha256': actual[row['path']]['sha256'], 'size': actual[row['path']]['bytes']} for row in inventory['files'] if row['path'] in actual]
+    need(all(rel in actual and rel not in {row['path'] for row in rows} for rel in added), 'Signing introduced an unexpected resource')
+    inventory['files'] = rows + [{'path': rel, 'sha256': actual[rel]['sha256'], 'size': actual[rel]['bytes']} for rel in sorted(added)]
     need({row['path'] for row in inventory['files']} == set(actual), 'Signing introduced an unexpected resource')
     inventory['signing'] = signing
     path.write_bytes((json.dumps(inventory, indent=2, ensure_ascii=False) + '\n').encode())
@@ -1417,7 +1536,7 @@ def execute(plan_path, output, work, allow_incomplete=False, runner_factory=Runn
         step('copy', files=len(copied), bound_to_reviewed_inventory=True)
         objects = plan['code_objects']
         for obj in objects:
-            if obj.get('filetype') == 'execute':
+            if obj.get('filetype') in ('execute', 'app-bundle'):
                 need((output / obj['path']).stat().st_mode & 0o100, f"{obj['path']}: copied executable lacks owner execute permission")
         extractor = next(o for o in objects if o.get('role') == 'yt-dlp')
         if extractor['action'] == 'replace-and-sign':
@@ -1432,7 +1551,7 @@ def execute(plan_path, output, work, allow_incomplete=False, runner_factory=Runn
         for obj in objects:
             if obj['action'] == 'outer-bundle':
                 continue
-            if obj['action'] not in ('sign', 'replace-and-sign'):
+            if obj['action'] not in ('sign', 'replace-and-sign', 'sign-bundle'):
                 report['objects'].append({'path': obj['path'], 'role': obj['role'], 'action': obj['action'], 'source': obj['source'],
                                           'payload': copied[obj['path']], 'note': 'Producer bytes retained unchanged'})
                 continue
@@ -1440,18 +1559,24 @@ def execute(plan_path, output, work, allow_incomplete=False, runner_factory=Runn
             entitlements = work / 'entitlements' / f"{obj['order']:02d}-{obj['role']}.plist"
             if obj['entitlements']:
                 write_new(entitlements, entitlements_plist(obj['entitlements']))
-            runner(sign_argv(plan['identity'], mode, obj, entitlements, path), label='sign:' + obj['path'])
+            # Inside out: a nested bundle is signed as a bundle, which signs its main executable
+            # and seals its Info.plist and resources, before anything that contains it.
+            target = output / obj['bundle'] if obj['action'] == 'sign-bundle' else path
+            runner(sign_argv(plan['identity'], mode, obj, entitlements, target), label='sign:' + (obj['bundle'] if obj['action'] == 'sign-bundle' else obj['path']))
             result = verify_object(runner, plan, obj, path)
+            if obj['action'] == 'sign-bundle':
+                result['bundle_seal'] = verify_nested_bundle(runner, target, obj)
             report['objects'].append({'path': obj['path'], 'role': obj['role'], 'action': obj['action'], 'entitlements': obj['entitlements'],
                                       'source': obj['source'], 'replacement': obj.get('replacement'), 'payload': result})
             signed.add(obj['path'][len(prefix):])
         step('nested-signatures', signed=len(signed))
         step('managed-manifests', **rewrite_manifests(resources, signed))
         receipt_state = install_engine_receipt(plan, request, resources, work, report, incomplete, tolerate)
+        seals = [o['bundle'][len(prefix):] + '/' + signin_bundle.SEAL for o in objects if o['action'] == 'sign-bundle']
         rewrite_inventory(resources, {'schema': INVENTORY_SIGNING_SCHEMA, 'mode': mode, 'purpose': purpose, 'payload_digests': 'post-signature',
                                       'source_build_inventory_sha256': plan['input']['build_inventory']['sha256'],
                                       'engine_receipt': receipt_state, **({'materials_binding': materials_binding} if two_phase else {}),
-                                      'release_accepted': False})
+                                      'release_accepted': False}, seals)
         step('public-resources', files=verify_public_resources(resources))
         before_seal = {rel: v for rel, v in resource_identities(output).items() if rel != 'Contents/MacOS/' + plan['input']['executable']}
         shell = next(o for o in objects if o['action'] == 'outer-bundle')
@@ -1462,8 +1587,10 @@ def execute(plan_path, output, work, allow_incomplete=False, runner_factory=Runn
         after = {rel: v for rel, v in resource_identities(output).items() if rel not in ('Contents/MacOS/' + plan['input']['executable'], 'Contents/_CodeSignature/CodeResources')}
         need(after == before_seal, 'Outer sealing changed nested files')
         for obj in objects:
-            if obj['action'] in ('sign', 'replace-and-sign'):
+            if obj['action'] in ('sign', 'replace-and-sign', 'sign-bundle'):
                 verify_object(runner, plan, obj, output / obj['path'])
+            if obj['action'] == 'sign-bundle':
+                verify_nested_bundle(runner, output / obj['bundle'], obj)
         gate = payload.check(output, plan['architecture'])
         need(gate['pass'], 'Signed payload fails the macOS minimum gate')
         step('seal', sealed_files=len(after) + 2, payload_minimum=gate['required'])
@@ -1530,7 +1657,7 @@ def install_engine_receipt(plan, request, resources, work, report, incomplete, a
         incomplete.append(('engine-receipt-missing', 'No engine receipt installed'))
         return 'absent'
     cfg, _ = load_receipts_config(request['receipts'], plan['architecture'])
-    artifacts = [(n, resources / 'bin' / n) for n in names]
+    artifacts = [(n, resources / materials_contract.binary_path(n, cfg['target'])) for n in names]
     try:
         folder, receipt, notices, record = guarded(fresh_receipt, 'engine', cfg['engine'], cfg['target'], artifacts, work)
         need(notices == (resources / 'third-party/native-NOTICES.txt').read_bytes(), 'Fresh engine notice asset differs from the installed native-NOTICES.txt')

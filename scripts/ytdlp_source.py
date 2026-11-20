@@ -51,8 +51,10 @@ README_REL = 'distribution/yt-dlp-source/README.md'
 CURL_PROFILE_REL = 'distribution/yt-dlp-source-curl/profile.json'
 # Known profiles and their READMEs. A plan names its profile; nothing else is accepted.
 PROFILES = {PROFILE_REL: README_REL, CURL_PROFILE_REL: 'distribution/yt-dlp-source-curl/README.md'}
+# The kit's first-party tooling; it must be closed under first-party imports (macos_signing
+# imports signin_bundle since 0.2.3), so a recipient can run it from the kit alone.
 TOOLING = ['ytdlp_source.py', 'ytdlp_source_replay.py', 'ytdlp_source_fixture.py', 'build-ytdlp-source.py', 'macos_signing.py', 'macos_extractor.py',
-           'check-macos-payload.py', 'public_inputs.py', 'materials_contract.py', 'native_review.py']
+           'check-macos-payload.py', 'public_inputs.py', 'materials_contract.py', 'native_review.py', 'signin_bundle.py']
 KIT_TOOLING = TOOLING + ['test-build-ytdlp-source.py']
 KIT_PREFIX = 'omd-ytdlp-source-kit-v1'
 CPU_ARM64 = 0x100000c
@@ -102,10 +104,12 @@ LIMITS = COMMON_LIMITS + [
     'that capability (decision of 2026-11-02), so this profile is not the public profile and is never promotable.',
 ] + PROOF_LIMITS
 CURL_LIMITS = COMMON_LIMITS + [
-    'This profile adds the curl_cffi impersonation capability (owner decision of 2026-11-02) from pinned sources: curl-impersonate v2.0.0, its '
-    'eight hash-pinned dependency archives and five hash-pinned patches, built by its own CMake superbuild with source-built CMake and Ninja and '
+    'This profile adds the curl_cffi impersonation capability (owner decision of 2026-11-02) from pinned sources: curl-impersonate v2.3.1, its '
+    'nine hash-pinned dependency archives and five hash-pinned patches, built by its own CMake superbuild with source-built CMake and Ninja and '
     'networking denied. No prebuilt libcurl-impersonate archive or platform wheel is used. It is still an unaccepted, unpromotable prototype.',
-    'CMake and Ninja are compiled here from pinned official source archives and are not shipped; Apple OS libraries they link are host prerequisites.',
+    'CMake, Ninja and pkgconf are compiled here from pinned official source archives and are not shipped; Apple OS libraries they link are host '
+    'prerequisites. The source-built pkgconf serves as pkg-config only for the recipe release step that writes libcurl-impersonate.pc and for '
+    "curl_cffi's scripts/build.py, which reads that file.",
     'The curl_cffi extension links Apple OS frameworks explicitly. Its dynamic lookups are limited to the Python C API. TLS ClientHello and '
     'HTTP/2 observations come from a loopback fixture with a throwaway CA; they are not a claim of fingerprint equality with real browsers.',
 ] + PROOF_LIMITS
@@ -274,8 +278,18 @@ def load_profile(path):
 
 
 TOOL_KEYS = {'id', 'input', 'official_recipe', 'steps', 'products'}
-IMPERSONATE_KEYS = {'input', 'official_recipe', 'recipe_files', 'dependencies', 'patches', 'unused_patches', 'environment', 'steps', 'release', 'check', 'binding'}
+# A tool may also install recorded relative symlinks to one of its products (pkgconf's
+# pkg-config name, which pkgconf leaves to the installer).
+TOOL_OPTIONAL = {'links'}
+IMPERSONATE_KEYS = {'input', 'official_recipe', 'recipe_files', 'dependencies', 'patches', 'unused_patches', 'environment', 'steps', 'release', 'check', 'binding',
+                    'pkg_config'}
+RELEASE_KEYS = {'tool', 'archives', 'output', 'headers', 'pkgconfig'}
+PKGCONFIG_KEYS = {'script', 'template', 'input', 'dependency_prefix', 'output', 'libs_private'}
 BINDING_KEYS = {'package', 'build_requires', 'environment', 'native', 'linked', 'lookup_prefixes', 'curl_version'}
+# Libs.private of the release pkg-config file: OS frameworks and libraries only, never a
+# search path, an archive path or a bundled archive.
+PRIVATE_LIB = re.compile(r'-l[A-Za-z0-9_+.-]+')
+FRAMEWORK = re.compile(r'[A-Za-z][A-Za-z0-9_]*')
 V2_EXPECTED = {'version', 'list_extractors_lines', 'ejs', 'build_path_members', 'request_handlers', 'optional_libraries', 'impersonate_targets', 'fixture'}
 FIXTURE_ENCODINGS = {'identity', 'gzip', 'deflate', 'br', 'zstd'}
 
@@ -284,13 +298,24 @@ def check_v2_sections(profile, sdists):
     """Source-built tools, the curl-impersonate recipe and the curl_cffi binding."""
     tools = profile['tools']
     need(isinstance(tools, list) and tools, 'A v2 profile needs source-built tools')
+    links = {}
     for recipe in tools:
-        need(isinstance(recipe, dict) and set(recipe) == TOOL_KEYS and by_id(profile, recipe['input'])['kind'] == 'tool-source', 'Invalid tool recipe')
+        need(isinstance(recipe, dict) and TOOL_KEYS <= set(recipe) <= TOOL_KEYS | TOOL_OPTIONAL and by_id(profile, recipe['input'])['kind'] == 'tool-source',
+             'Invalid tool recipe')
         check_steps(recipe['steps'], recipe['id'])
         need(isinstance(recipe['products'], list) and recipe['products'] and all(public_inputs.relative(p) for p in recipe['products']), 'Invalid tool products')
+        for link, target in recipe.get('links', {}).items():
+            need(public_inputs.relative(link) and isinstance(target, str) and FILE.fullmatch(target)
+                 and (PurePosixPath(link).parent / target).as_posix() in recipe['products'] and link not in recipe['products'] and link not in links,
+                 'A tool link must name a product of the same tool in its own directory')
+            links[link] = target
     need(sorted(r['input'] for r in tools) == sorted(r['id'] for r in profile['inputs'] if r['kind'] == 'tool-source'), 'Every tool source needs exactly one recipe')
     cur = profile['impersonate']
     need(isinstance(cur, dict) and set(cur) == IMPERSONATE_KEYS, 'Invalid impersonate section')
+    # pkg-config is exposed only as a recorded link of a source-built tool, by its private directory.
+    pkg_dir = cur['pkg_config']
+    need(isinstance(pkg_dir, str) and re.fullmatch(r'\{tools\}/[a-z0-9][a-z0-9._/-]*', pkg_dir) and pkg_dir[len('{tools}/'):] + '/pkg-config' in links
+         and public_inputs.relative(pkg_dir[len('{tools}/'):]), 'pkg-config must be a recorded link of a source-built tool')
     need([r['id'] for r in profile['inputs'] if r['kind'] == 'curl-recipe'] == [cur['input']], 'Exactly one curl-impersonate recipe input is required')
     deps = cur['dependencies']
     need(isinstance(deps, list) and sorted(d.get('input', '') for d in deps) == sorted(r['id'] for r in profile['inputs'] if r['kind'] == 'curl-dep'),
@@ -312,8 +337,17 @@ def check_v2_sections(profile, sdists):
          and all(isinstance(v, str) and re.fullmatch(r'-ffile-prefix-map=\{superbuild\}/deps/src/=', v) for v in cur['environment'].values()),
          'The superbuild environment may only remap source paths')
     release = cur['release']
-    need(isinstance(release, dict) and set(release) == {'tool', 'archives', 'output', 'headers'} and release['tool'] == '/usr/bin/libtool', 'Invalid release section')
+    need(isinstance(release, dict) and set(release) == RELEASE_KEYS and release['tool'] == '/usr/bin/libtool', 'Invalid release section')
     check_steps([release['archives'], [release['output'], release['headers']]], 'impersonate release')
+    need(all(re.fullmatch(r'lib[A-Za-z0-9_+-]+\.a', PurePosixPath(a).name) for a in release['archives'])
+         and len({PurePosixPath(a).name for a in release['archives']}) == len(release['archives']), 'Release archives must be distinct lib*.a files')
+    pkgconfig = release['pkgconfig']
+    need(isinstance(pkgconfig, dict) and set(pkgconfig) == PKGCONFIG_KEYS, 'Invalid release pkg-config section')
+    need(pkgconfig['script'] in cur['recipe_files'] and pkgconfig['template'] in cur['recipe_files'], 'The release pkg-config script and template must be pinned recipe files')
+    check_steps([[pkgconfig['input'], pkgconfig['dependency_prefix'], pkgconfig['output']]], 'impersonate release pkg-config')
+    need(PurePosixPath(pkgconfig['output']).parent == PurePosixPath(release['output']).parent and PurePosixPath(pkgconfig['output']).name == 'libcurl-impersonate.pc',
+         'The release pkg-config file must sit beside the release archive')
+    check_private_libs(pkgconfig['libs_private'], release['archives'])
     check = cur['check']
     need(isinstance(check, dict) and set(check) == {'binary', 'version_components', 'features'} and public_inputs.relative(check['binary'])
          and all(isinstance(v, str) and v for v in check['version_components'] + check['features']), 'Invalid curl check section')
@@ -337,6 +371,23 @@ def check_v2_sections(profile, sdists):
          and len({tuple(t) for t in expected['impersonate_targets']}) == len(expected['impersonate_targets']), 'Invalid expected impersonate targets')
     need(isinstance(expected['fixture'], list) and expected['fixture']
          and all(isinstance(f, dict) and set(f) == {'target', 'encoding'} and f['encoding'] in FIXTURE_ENCODINGS for f in expected['fixture']), 'Invalid fixture cases')
+
+
+def check_private_libs(tokens, archives):
+    """Expected `Libs.private` of the release pkg-config file: `-framework NAME` pairs and
+    `-lNAME` OS libraries only. Search paths, file paths and the bundled archives (which the
+    merged release archive already holds) are refused."""
+    bundled = {'curl-impersonate'} | {PurePosixPath(a).name[3:-2] for a in archives}
+    need(isinstance(tokens, list) and tokens and all(isinstance(t, str) for t in tokens), 'Invalid expected Libs.private')
+    at = 0
+    while at < len(tokens):
+        token = tokens[at]
+        if token == '-framework':
+            need(at + 1 < len(tokens) and FRAMEWORK.fullmatch(tokens[at + 1]), 'Libs.private may name only OS frameworks and libraries')
+            at += 2
+            continue
+        need(PRIVATE_LIB.fullmatch(token) and token[2:] not in bundled, f'Libs.private may name only OS frameworks and libraries, not {token!r}')
+        at += 1
 
 
 # ---------------------------------------------------------------- legacy lock
@@ -1722,7 +1773,22 @@ def build_tools(ctx, runner, extracted):
             version = runner.output(f'tool-{recipe["id"]}-version', [path, '--version'], ctx.work, ctx.env()).strip().splitlines()[0]
             need(source['version'] in version.split(), f'{product} reports {version!r}, not the pinned {source["version"]}')
             rows[product] = {'input': recipe['input'], 'version': version, 'sha256': sha(data), 'bytes': len(data), 'minimum': found, 'linked': facts[0]['dylibs']}
+        for link, target in sorted(recipe.get('links', {}).items()):
+            check_tool_link(ctx.tools, link, target, rows)
+            version = runner.output(f'tool-{recipe["id"]}-link-version', [ctx.tools / link, '--version'], ctx.work, ctx.env()).strip().splitlines()[0]
+            need(version == rows[(PurePosixPath(link).parent / target).as_posix()]['version'], f'{link} reports {version!r}, not its product version')
+            rows[link] = {'input': recipe['input'], 'link_to': target, 'version': version}
     return rows
+
+
+def check_tool_link(tools, link, target, products):
+    """A recorded tool link: a relative symlink, in the product's own directory, to exactly
+    that verified product file (nothing else may stand at the name the recipe calls)."""
+    path = Path(tools) / link
+    need(path.is_symlink() and os.readlink(path) == target, f'Tool link {link} must be a symlink to {target}')
+    product = (PurePosixPath(link).parent / target).as_posix()
+    need(product in products and (Path(tools) / product).is_file() and not (Path(tools) / product).is_symlink(), f'Tool link {link} does not name a verified product')
+    need(file_sha(path) == products[product]['sha256'], f'Tool link {link} does not resolve to the verified product')
 
 
 AR_MAGIC = b'!<arch>\n'
@@ -1830,10 +1896,12 @@ def check_curl_version(text, check):
 
 
 def build_impersonate(ctx, runner):
-    """curl-impersonate v2.0.0's CMake superbuild with networking denied. ExternalProject
+    """The pinned curl-impersonate CMake superbuild with networking denied. ExternalProject
     finds each pinned dependency archive already staged (by digest) at its download path;
     it verifies URL_HASH and applies the pinned patches. Then the upstream CI's macOS
-    release-archive merge is replayed with libtool, and its members are proven."""
+    release step is replayed: the recipe's ReleasePkgConfig.cmake with the source-built
+    pkg-config, and the libtool archive merge. The merged members and the release
+    pkg-config file are proven."""
     profile, cur, planned = ctx.profile, ctx.profile['impersonate'], ctx.plan['impersonate']
     minimum = profile['target']['macos_minimum']
     recipe = ctx.values['recipe']
@@ -1867,6 +1935,18 @@ def build_impersonate(ctx, runner):
     need(all(a.is_file() and not a.is_symlink() for a in archives), 'A recorded static archive is missing')
     need(not output.parent.exists(), 'The release directory must be new')
     output.parent.mkdir(parents=True)
+    # "Create tar release files" on macOS: the recipe's ReleasePkgConfig.cmake resolves curl's
+    # generated libcurl.pc with pkg-config against the dependency .pc files and writes the
+    # release libcurl-impersonate.pc (system libraries only), then libtool merges the archives.
+    pkgconfig = release['pkgconfig']
+    pkg_dir = Path(substitute(cur['pkg_config'], ctx.values))
+    pc_file = Path(substitute(pkgconfig['output'], ctx.values))
+    need(pc_file.parent == output.parent, 'The release pkg-config file must sit beside the release archive')
+    runner.run('impersonate-release-pkgconfig', sandboxed([ctx.tools / 'bin' / 'cmake', f'-DPKG_CONFIG={pkg_dir / "pkg-config"}',
+                                                           f'-DINPUT_PC={substitute(pkgconfig["input"], ctx.values)}',
+                                                           f'-DDEPENDENCY_PREFIX={substitute(pkgconfig["dependency_prefix"], ctx.values)}',
+                                                           f'-DLIBRARY_DIR={output.parent}', f'-DARCHIVES={";".join(str(a) for a in archives)}',
+                                                           '-P', recipe / pkgconfig['script']]), ctx.work, ctx.env(path=[str(pkg_dir)]))
     runner.run('impersonate-release', [release['tool'], '-static', '-o', output, *archives], ctx.work, ctx.env())
     header_rows = {}
     (output.parent / 'include' / 'curl').mkdir(parents=True)
@@ -1874,17 +1954,57 @@ def build_impersonate(ctx, runner):
         need(header.is_file() and not header.is_symlink() and header.suffix == '.h', f'Unexpected installed header: {header.name}')
         shutil.copyfile(header, output.parent / 'include' / 'curl' / header.name)
         header_rows[header.name] = file_sha(header)
-    need(sorted(p.name for p in output.parent.iterdir()) == ['include', output.name], 'The release directory holds more than the archive and headers')
+    need(sorted(p.name for p in output.parent.iterdir()) == sorted(['include', output.name, pc_file.name]),
+         'The release directory holds more than the archive, its pkg-config file and headers')
     membership = check_release_archive(output, archives, minimum)
+    version = cur['check']['version_components'][0].split('/', 1)[1]
+    pc_text = check_release_pkgconfig(public_inputs.regular(pc_file).read_text(), (recipe / pkgconfig['template']).read_text(), version, pkgconfig['libs_private'])
+    # What curl_cffi's scripts/build.py will ask: `pkg-config --static --libs libcurl-impersonate`
+    # with PKG_CONFIG_PATH at the release directory.
+    resolved = runner.output('impersonate-release-pkgconfig-libs', sandboxed([pkg_dir / 'pkg-config', '--static', '--libs', 'libcurl-impersonate']), ctx.work,
+                             ctx.env({'PKG_CONFIG_PATH': str(output.parent)}, [str(pkg_dir)]))
+    link_flags = resolved_link_flags(resolved, output.parent, pkgconfig['libs_private'])
     binary = ctx.impersonate / cur['check']['binary']
     data = binary.read_bytes()
     check_target_macho(data, cur['check']['binary'], minimum)
     facts = macho_facts(data)
     check_linkage(facts, cur['check']['binary'], ())
     check = check_curl_version(runner.output('impersonate-check', sandboxed([binary, '-V']), ctx.work, ctx.env()), cur['check'])
+    membership['pkgconfig'] = {'file': pc_file.name, 'sha256': sha(pc_text.encode()), 'bytes': len(pc_text.encode()), 'text': pc_text,
+                               'script': {'path': pkgconfig['script'], 'sha256': cur['recipe_files'][pkgconfig['script']]},
+                               'template': {'path': pkgconfig['template'], 'sha256': cur['recipe_files'][pkgconfig['template']]},
+                               'pkg_config': cur['pkg_config'] + '/pkg-config', 'libs_private': pkgconfig['libs_private'], 'resolved_link_flags': link_flags}
     return {'sandbox': BUILD_SANDBOX, 'environment': cur['environment'], 'staged': {d['project']: {'file': d['file'], 'sha256': d['sha256']} for d in planned['dependencies']},
             'patches': patches, 'archives': {a.name: identity(a) for a in archives}, 'release': membership, 'headers': header_rows,
             'binary': {'path': cur['check']['binary'], 'sha256': sha(data), 'linked': facts[0]['dylibs'], **check}}
+
+
+def check_release_pkgconfig(text, template, version, libs_private):
+    """The release libcurl-impersonate.pc must be exactly the recipe template configured with
+    the pinned curl version and the expected system libraries: the relocatable
+    `${pcfiledir}` prefix, `-lcurl-impersonate`, no search path or archive path from the
+    build, and nothing else."""
+    need(set(re.findall(r'@([A-Z_]+)@', template)) == {'CURL_VERSION', 'CURL_SYSTEM_LIBS'}, 'Unexpected release pkg-config template')
+    expected = template.replace('@CURL_VERSION@', version).replace('@CURL_SYSTEM_LIBS@', ' '.join(libs_private))
+    if text != expected:
+        found = next((l.split(':', 1)[1].strip() for l in text.splitlines() if l.startswith('Libs.private:')), None)
+        raise Refused(f'The release pkg-config file differs from the pinned template and expected values (Libs.private: {found!r})')
+    need(not HOST_PATH.search(text) and '/' not in text.split('Libs.private:', 1)[1].splitlines()[0], 'The release pkg-config file names a build path')
+    return text
+
+
+def resolved_link_flags(text, release, libs_private):
+    """`pkg-config --static --libs libcurl-impersonate` on the release file: the release
+    directory, the bundled archive name (which curl_cffi drops in favour of force-loading the
+    archive) and the expected system libraries (pkg-config may drop repeated -l entries)."""
+    import shlex
+    tokens = shlex.split(text.strip())
+    need(tokens[:2] == [f'-L{release}', '-lcurl-impersonate'], f'pkg-config resolved other release flags: {tokens[:2]}')
+    rest = tokens[2:]
+    deduplicated = [t for i, t in enumerate(libs_private) if not (t.startswith('-l') and t in libs_private[i + 1:])]
+    need(rest in (libs_private, deduplicated) or rest == [t for i, t in enumerate(libs_private) if not (t.startswith('-l') and t in libs_private[:i])],
+         f'pkg-config resolved other system flags: {rest}')
+    return [tokens[0], *rest]
 
 
 COMMAND_LINE = re.compile(r'^\s*(/usr/bin/clang\s.*)$')
@@ -1926,13 +2046,15 @@ def dynamic_lookups(text):
     return dict(sorted(bound.items())), sorted(flat)
 
 
-def binding_log_facts(text, archive, native):
+def binding_log_facts(text, archive, native, link_flags):
     """What the curl_cffi wheel step logged (pip -v): scripts/build.py found the source-built
     archive and never ran its download fallback; cffi generated the wrapper once; the two
     compiles are the generated wrapper and the sdist shim; the one link force-loads the
-    archive into the expected extension."""
+    archive into the expected extension, directly followed by exactly the flags the
+    source-built pkg-config resolved from the release pkg-config file."""
     need(f'libcurl-impersonate: {archive} already downloaded.' in text, 'curl_cffi did not find the source-built release archive')
     need('Downloading libcurl-impersonate' not in text and 'urlretrieve' not in text, 'curl_cffi attempted its prebuilt-archive download fallback')
+    need('Missing libcurl-impersonate.pc' not in text and 'Install pkg-config' not in text, 'curl_cffi did not find the release pkg-config file or pkg-config')
     compiles, link = binding_commands(text)
     sources = [c[c.index('-c') + 1] for c in compiles]
     generated = [s for s in sources if PurePosixPath(s).name.endswith('._wrapper.c') and s.startswith('build/temp.')]
@@ -1940,6 +2062,8 @@ def binding_log_facts(text, archive, native):
     others = [s for s in sources if s not in generated]
     need(others == ['ffi/shim.c'], f'Unexpected compiled sources: {others}')
     need(f'-Wl,-force_load,{archive}' in link and '-undefined' in link, 'The extension link does not force-load the release archive')
+    at = link.index(f'-Wl,-force_load,{archive}') + 1
+    need(link[at:at + len(link_flags)] == link_flags, f'The extension link does not use the resolved pkg-config flags: {link[at:at + len(link_flags) + 1]}')
     product = link[link.index('-o') + 1]
     need(product.startswith('build/lib.') and product.endswith('/' + native), f'Unexpected link output: {product}')
     return compiles, link, generated[0], product
@@ -1952,11 +2076,15 @@ def check_binding(ctx, runner, log, src_root, wheel, wheel_files, binding, relea
       step had networking denied);
     - both logged compiles are replayed and reproduce their objects, and the logged link,
       replayed on those objects, reproduces the packaged extension byte for byte;
-    - the link force-loads the release archive, links only the profile's OS libraries, and
-      leaves only Python C-API symbols to dynamic lookup."""
+    - the link force-loads the release archive followed by the flags the source-built
+      pkg-config resolved from the release pkg-config file, links only the profile's OS
+      libraries, and leaves only Python C-API symbols to dynamic lookup."""
     archive = release / 'libcurl-impersonate.a'
     need(file_sha(archive) == ctx.record['impersonate']['release']['sha256'], 'The release archive changed before linking')
-    compiles, link, generated, product = binding_log_facts(log.read_text(errors='replace'), archive, binding['native'])
+    need(file_sha(release / 'libcurl-impersonate.pc') == ctx.record['impersonate']['release']['pkgconfig']['sha256'],
+         'The release pkg-config file changed before linking')
+    compiles, link, generated, product = binding_log_facts(log.read_text(errors='replace'), archive, binding['native'],
+                                                           ctx.record['impersonate']['release']['pkgconfig']['resolved_link_flags'])
     need(file_sha(src_root / product) == wheel_files[binding['native']], 'The wheel extension differs from the linked build product')
     replay = ctx.work / 'binding-replay'
     replay.mkdir()
@@ -2114,6 +2242,9 @@ def build_steps(ctx, runner, record, save):
             release = Path(extra['IMPERSONATE_BUILD_DIR'])
             need((release / 'libcurl-impersonate.a').is_file() and file_sha(release / 'libcurl-impersonate.a') == record['impersonate']['release']['sha256'],
                  'The source-built release archive is missing; refusing the prebuilt-download fallback')
+            # scripts/build.py runs `pkg-config --static --libs libcurl-impersonate`: only the
+            # source-built pkg-config (a recorded pkgconf link) is put on PATH, for this step only.
+            path = [substitute(profile['impersonate']['pkg_config'], ctx.values)]
         out = ctx.wheels / package
         out.mkdir()
         argv = [bpython, '-I', '-m', 'pip', 'wheel', *(['-v'] if is_v2(profile) else []), '--no-index', '--no-deps', '--no-build-isolation',
@@ -2742,8 +2873,9 @@ def verify_kit(path, expected_sha256=None):
     if profile['schema'] == PROFILE_SCHEMA_V2:
         pinned = profile['impersonate']['patches']
         need(sorted(row['sha256'] for row in index.get('patches', [])) == sorted(pinned.values()), 'Kit recipe patches differ from the profile pins')
-        need(receipt.get('impersonate', {}).get('release', {}).get('sha256') and receipt.get('curl_binding', {}).get('replay') == 'identical',
-             'Kit receipt lacks the curl-impersonate release and binding proof')
+        release = receipt.get('impersonate', {}).get('release', {})
+        need(release.get('sha256') and release.get('pkgconfig', {}).get('sha256') and receipt.get('curl_binding', {}).get('replay') == 'identical',
+             'Kit receipt lacks the curl-impersonate release, release pkg-config and binding proof')
     return {'kit': path.name, **found, 'files': len(members) + 1, 'payload_bytes': total, 'executable_sha256': index['executable_sha256'], 'verified': True}
 
 

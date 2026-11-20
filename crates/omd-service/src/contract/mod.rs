@@ -189,7 +189,11 @@ fn shape(s: &mut Schemas, method: &str, path: &str) -> Shape {
             value.query = s.query::<ShutdownQuery>();
             value
         }
-        ("POST", "/v2/clients") => response!("attachClient", ClientLease),
+        ("POST", "/v2/clients") => {
+            let mut value = response!("attachClient", ClientLease);
+            value.query = s.query::<AttachQuery>();
+            value
+        }
         ("POST", "/v2/clients/{id}") => response!("heartbeatClient", ClientHeartbeat),
         ("DELETE", "/v2/clients/{id}") => response!("detachClient", ClientDetached),
         ("GET", "/v2/sources") => page!("listSources", Source),

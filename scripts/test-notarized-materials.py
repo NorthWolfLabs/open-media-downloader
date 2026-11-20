@@ -12,7 +12,10 @@ archives, real ditto and real codesign on a linker-signed fixture executable. Ca
 uncanned codesign and stapler refuse those fixtures.
 
 Opt-in, read-only real data: OMD_NOTARIZED_MATERIALS_CHAIN names a JSON file with the
-bind-notarized-materials.py options of the genuine signed/stapled chain. It runs the full
+bind-notarized-materials.py options of the genuine signed/stapled chain ("options"), the
+expected ticket, outer code, binding digest, payload and archive member counts ("expect")
+and a stale prepared extractor for the handoff control; a release round regenerates it next
+to its evidence. It runs the full
 prepare/verify with uncanned Apple tools and negative controls on owned private copies
 (ticket corruption, magic-only, truncated and zero-length tickets, code corruption, an extra
 file, a seal change, a wrong Team, timeouts, missing tools, output overflow and replacement
@@ -46,7 +49,7 @@ NATIVE = platform.system() == 'Darwin' and Path(nm.CODESIGN).exists() and Path(n
 COMPILER = shutil.which('clang')
 CHAIN = os.environ.get('OMD_NOTARIZED_MATERIALS_CHAIN')
 FIXTURE_DIGEST = 'f1adf252720868eb5542ecf9f1763be1df2230a48ec2227cfe8add9a500f554a'
-FINAL_DIGESTS = {1: '6c07008986773c2583d6ee2466db2acc86cd07953b9fbf249d517669f2f516ca', 2: 'fa191ccd7529e2b4386c5433611ff2c3959776335ffafbb1de81c0206c6ed08e'}
+FINAL_DIGESTS = {1: 'e14f2ad5155bf1fe6e3b7a4c9f6e45eebf5cf2924d1967c1eee87fe19a1a0da7', 2: '07df65c1fd87609306f2af1e86be0a2886007e6af574a4b91f2584ab96f3b923'}
 PROVENANCE = (('com.apple.provenance', bytes.fromhex('010200a390490c9b0c10d0')),)
 STRUCTURE = {'schema': nm.SCHEMA, 'structure_validated': True, 'macos_verification_required': True, 'release_accepted': False}
 
@@ -97,6 +100,27 @@ class SharedContract(unittest.TestCase):
         self.assertEqual(self.fixtures['schema'], 'omd-notarized-materials-contract-fixtures-v1')
         for version, digest in FINAL_DIGESTS.items():
             self.assertEqual(sha((SCRIPTS.parent / f'distribution/final-materials-fixtures-v{version}.json').read_bytes()), digest)
+
+    def test_final_expectations_follow_the_bindings_recorded_layout(self):
+        # A binding made before the sign-in window became an app bundle records a bare
+        # bin/omd-signin; the expectations come from that layout, not the current one.
+        res = 'Contents/Resources/resources/v2'
+        with tempfile.TemporaryDirectory() as temp:
+            app = Path(temp)
+            for rel, value in (('tools/tools-v2.json', {name: {'version': name + '-1'} for name in ('yt_dlp', 'ffmpeg', 'ffprobe', 'node')}),
+                               ('browser/browser-tools-v2.json', {'version': 'browser-1'})):
+                (app / res / rel).parent.mkdir(parents=True, exist_ok=True)
+                (app / res / rel).write_text(json.dumps(value))
+            for helper in ('bin/omd-signin', 'bin/OMD Sign-In.app/Contents/MacOS/omd-signin'):
+                with self.subTest(helper):
+                    code = {'Contents/MacOS/fixture-desktop': 'desktop-shell', f'{res}/bin/omd-engine': 'engine', f'{res}/{helper}': 'sign-in-window',
+                            f'{res}/tools/yt_dlp/yt-dlp_macos': 'yt-dlp'}
+                    binding = {'target': 'darwin-arm64', 'version': '1.0.0', 'locks': {}, 'layout': {'resources': res, 'executable': 'fixture-desktop', 'code': code}}
+                    required = nm.final_expectations(app, binding)['required']
+                    self.assertEqual({n: required[n]['prefix'] for n in ('omd-engine', 'omd-signin')}, {'omd-engine': 'bin/omd-engine', 'omd-signin': helper})
+            code[f'{res}/bin/omd-signin'] = 'sign-in-window'
+            with self.assertRaisesRegex(ValueError, 'Invalid final payload layout'):
+                nm.final_expectations(app, binding)
 
     def test_shared_cases(self):
         cases = self.fixtures['cases']
@@ -672,7 +696,7 @@ class GenuineChain(unittest.TestCase):
         envelope = json.loads((out / nm.NAME).read_text())
         report = json.loads((out / nm.REPORT_NAME).read_text())
         want = self.chain['expect']
-        self.assertEqual((len(envelope['signed_payload']['files']), len(envelope['stapled_payload']['files'])), (180, 181))
+        self.assertEqual([len(envelope['signed_payload']['files']), len(envelope['stapled_payload']['files'])], want['payload_files'])
         self.assertEqual(envelope['ticket'], want['ticket'])
         self.assertEqual(envelope['outer_code']['slices'], [want['outer']])
         self.assertEqual((envelope['signed_binding']['sha256'], envelope['release_accepted'], report['release_accepted']), (want['binding_sha256'], False, False))
@@ -711,7 +735,7 @@ class GenuineChain(unittest.TestCase):
         app = Path(options['--stapled-app']).name
         uploaded = nm.read_archive(Path(options['--uploaded-archive']), signed, app)
         distribution = nm.read_archive(Path(options['--distribution-archive']), stapled, app)
-        self.assertEqual((len(uploaded['payload']), len(distribution['payload']), len(uploaded['transport']), len(distribution['transport'])), (180, 181, 228, 229))
+        self.assertEqual([len(uploaded['payload']), len(distribution['payload']), len(uploaded['transport']), len(distribution['transport'])], self.chain['expect']['archive_members'])
         self.assertEqual(distribution['attributes'], ['com.apple.provenance'])
         with self.assertRaisesRegex(ValueError, 'differs from the expected payload'):
             nm.read_archive(Path(options['--uploaded-archive']), stapled, app)

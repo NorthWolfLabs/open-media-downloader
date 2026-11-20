@@ -38,7 +38,7 @@ class Fixture:
                 body=self.rfile.read(int(self.headers.get('Content-Length',0)))
                 owner.log.append((self.command,self.path,dict(self.headers),json.loads(body) if body else None))
                 code=200; slow=False
-                if self.path=='/v2/clients': value={'id':'org.example.lease','heartbeat_seconds':1,'lease_seconds':5}
+                if self.path in ('/v2/clients','/v2/clients?finish_downloads=true'): value={'id':'org.example.lease','heartbeat_seconds':1,'lease_seconds':5}
                 elif self.path.startswith('/v2/clients/'):
                     if self.command=='POST' and owner.fail_heartbeat: code=503; value={'code':'lease_lost','message':'Fixture lease lost','retryable':False,'actions':[]}
                     else: value={}
@@ -262,6 +262,8 @@ class Tests(unittest.TestCase):
         err=c.close();self.assertEqual(c.process.returncode,0);self.assertNotIn(b'secret',err)
         self.assertTrue(any(r[:2]==('POST','/v2/clients/org.example.lease') for r in self.f.log))
         self.assertEqual(self.f.log[-1][:2],('DELETE','/v2/clients/org.example.lease'))
+        # An agent can submit downloads and disconnect: the lease asks the engine to finish them.
+        self.assertEqual([r[1] for r in self.f.log if r[0]=='POST' and r[1].startswith('/v2/clients') and 'org.example' not in r[1]],['/v2/clients?finish_downloads=true'])
         self.assertTrue(all({k.lower():v for k,v in r[2].items()}['authorization']=='Bearer normal-secret' for r in self.f.log))
     def test_errors_redirect_bounds(self):
         c=self.client()

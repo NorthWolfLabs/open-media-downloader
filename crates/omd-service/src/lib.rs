@@ -57,7 +57,176 @@ pub struct App {
     pub shutdown: CancellationToken,
     pub providers: Arc<RwLock<BTreeMap<String, Provider>>>,
     pub running: Arc<Mutex<BTreeMap<String, CancellationToken>>>,
-    pub clients: Arc<Mutex<BTreeMap<String, tokio::time::Instant>>>,
+    pub clients: Arc<Mutex<Clients>>,
+}
+/// One attached client: when it attached or last sent a heartbeat, and whether
+/// it asked the engine to finish downloads after it leaves.
+#[derive(Debug, Clone, Copy)]
+pub struct Lease {
+    pub seen: tokio::time::Instant,
+    pub finish_downloads: bool,
+}
+impl Lease {
+    pub fn live(&self) -> bool {
+        self.seen.elapsed() < CLIENT_LEASE
+    }
+}
+/// The attached clients, and what the last one to leave asked for.
+#[derive(Debug, Default)]
+pub struct Clients {
+    pub leases: BTreeMap<String, Lease>,
+    /// Whether the last client to leave (detached, or the most recently seen
+    /// of the last leases to expire) asked for downloads to finish. False
+    /// until a client leaves, so an engine nobody attached to stops as before.
+    last_finishes_downloads: bool,
+}
+impl Clients {
+    pub fn attach(&mut self, id: String, finish_downloads: bool) {
+        self.leases.insert(
+            id,
+            Lease {
+                seen: tokio::time::Instant::now(),
+                finish_downloads,
+            },
+        );
+    }
+    /// Renews a lease that has not been pruned yet; false when it is unknown.
+    pub fn renew(&mut self, id: &str) -> bool {
+        let Some(lease) = self.leases.get_mut(id) else {
+            return false;
+        };
+        lease.seen = tokio::time::Instant::now();
+        true
+    }
+    pub fn detach(&mut self, id: &str) {
+        if let Some(lease) = self.leases.remove(id)
+            && self.leases.is_empty()
+        {
+            self.last_finishes_downloads = lease.finish_downloads;
+        }
+    }
+    /// Drops expired leases and returns the ids still live.
+    pub fn prune(&mut self) -> BTreeSet<String> {
+        let expired: Vec<Lease> = self
+            .leases
+            .values()
+            .filter(|lease| !lease.live())
+            .copied()
+            .collect();
+        self.leases.retain(|_, lease| lease.live());
+        if self.leases.is_empty()
+            && let Some(last) = expired
+                .iter()
+                .max_by_key(|lease| (lease.seen, lease.finish_downloads))
+        {
+            self.last_finishes_downloads = last.finish_downloads;
+        }
+        self.leases.keys().cloned().collect()
+    }
+    pub fn is_live(&self, id: &str) -> bool {
+        self.leases.get(id).is_some_and(Lease::live)
+    }
+    pub fn len(&self) -> usize {
+        self.leases.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.leases.is_empty()
+    }
+    /// Whether the client that left last asked for downloads to finish.
+    pub fn last_finishes_downloads(&self) -> bool {
+        self.last_finishes_downloads
+    }
+}
+/// The macOS helper app that may hold the sign-in window, next to the engine.
+/// A bundle gives the window a proper application name and identity; a
+/// runtime without one keeps the bare executable.
+pub const SIGN_IN_BUNDLE: &str = "OMD Sign-In.app";
+/// The native sign-in window helper for the engine executable at `engine`:
+/// on macOS the executable inside [`SIGN_IN_BUNDLE`] when that bundle is
+/// installed beside the engine, otherwise `omd-signin` (`omd-signin.exe` on
+/// Windows) beside it, as before.
+pub fn sign_in_helper(engine: &std::path::Path) -> PathBuf {
+    if cfg!(target_os = "macos") {
+        let bundled = engine
+            .with_file_name(SIGN_IN_BUNDLE)
+            .join("Contents/MacOS/omd-signin");
+        if bundled.is_file() {
+            return bundled;
+        }
+    }
+    engine.with_file_name(if cfg!(windows) {
+        "omd-signin.exe"
+    } else {
+        "omd-signin"
+    })
+}
+/// How long a client lease lasts without a heartbeat.
+pub const CLIENT_LEASE: Duration = Duration::from_secs(45);
+/// How long a new engine waits for its first client before it may stop.
+pub const IDLE_GRACE: Duration = Duration::from_secs(60);
+/// Prunes expired client leases and reports whether an engine whose
+/// background operation is off should stop now. It keeps running while any
+/// client holds a lease and during its first minute. Once the last client has
+/// left, it stops unless that client attached with `finish_downloads` (the CLI
+/// and MCP server do): then it stays up while a download is queued or running
+/// and stops at the first check after the queue empties. A client that attaches
+/// without it (the desktop) still stops the engine, and its downloads, when it
+/// leaves.
+pub async fn idle_exit_due(app: &App, uptime: Duration) -> bool {
+    let mut clients = app.clients.lock().await;
+    let live = clients.prune();
+    let finish_downloads = clients.last_finishes_downloads();
+    drop(clients);
+    let empty = live.is_empty();
+    app.browser_sessions.prune(&live).await;
+    if !empty || uptime <= IDLE_GRACE {
+        return false;
+    }
+    let background = app
+        .store
+        .setting("preferences")
+        .await
+        .ok()
+        .flatten()
+        .and_then(|v| v["background"].as_bool())
+        .unwrap_or(false);
+    if background {
+        return false;
+    }
+    if !finish_downloads {
+        tracing::info!("no client lease; stopping");
+        return true;
+    }
+    if !app.running.lock().await.is_empty() {
+        return false;
+    }
+    match app.store.has_unfinished_downloads().await {
+        Ok(false) => {
+            tracing::info!("no client lease and no unfinished download; stopping");
+            true
+        }
+        Ok(true) => false,
+        // Never cut a download short on an unreadable queue; the job runner
+        // reports the same store failure.
+        Err(error) => {
+            tracing::warn!(error=%error, "could not read the download queue; staying up");
+            false
+        }
+    }
+}
+/// After a `selection_changed` failure, ends reuse of the cached enumerations
+/// of the collections involved, so a client's refresh lists the source again
+/// instead of getting the stale list back. The failure itself is unchanged.
+pub(crate) async fn forget_stale_enumerations(app: &App, collections: &[&SourceRef]) {
+    let mut seen = BTreeSet::new();
+    for collection in collections {
+        if !seen.insert(collection.key()) {
+            continue;
+        }
+        if let Err(error) = app.store.invalidate_snapshots(collection).await {
+            tracing::warn!(error=%error, "could not invalidate a changed collection's enumeration");
+        }
+    }
 }
 #[derive(Debug)]
 pub struct ApiError(StatusCode, Problem);
@@ -1125,30 +1294,31 @@ async fn shutdown(
     app.shutdown.cancel();
     Ok(Json(json!({"state":"stopping"})))
 }
-async fn attach(State(app): State<App>) -> ApiResult<Value> {
+async fn attach(
+    State(app): State<App>,
+    Query(query): Query<contract::models::AttachQuery>,
+) -> ApiResult<Value> {
     let id = omd_store::id("client");
     app.clients
         .lock()
         .await
-        .insert(id.clone(), tokio::time::Instant::now());
+        .attach(id.clone(), query.finish_downloads);
     Ok(Json(
-        json!({"id":id,"heartbeat_seconds":15,"lease_seconds":45}),
+        json!({"id":id,"heartbeat_seconds":15,"lease_seconds":CLIENT_LEASE.as_secs(),"finish_downloads":query.finish_downloads}),
     ))
 }
 async fn heartbeat(State(app): State<App>, Path(id): Path<String>) -> ApiResult<Value> {
-    let mut clients = app.clients.lock().await;
-    let lease = clients.get_mut(&id).ok_or_else(|| {
-        problem(
+    if !app.clients.lock().await.renew(&id) {
+        return Err(problem(
             StatusCode::NOT_FOUND,
             "client_expired",
             "Attach again; the client lease expired.",
-        )
-    })?;
-    *lease = tokio::time::Instant::now();
+        ));
+    }
     Ok(Json(json!({"id":id})))
 }
 async fn detach(State(app): State<App>, Path(id): Path<String>) -> ApiResult<Value> {
-    app.clients.lock().await.remove(&id);
+    app.clients.lock().await.detach(&id);
     app.browser_sessions.detach(&id).await;
     Ok(Json(json!({"detached":true})))
 }
@@ -1402,6 +1572,8 @@ fn validate_manifest(m: &ProviderManifest) -> Result<(), ApiError> {
                 "collection",
                 "releases",
                 "resolve",
+                // Not an operation: the source reads the hint on `resolve`.
+                omd_domain::COLLECTION_HINT_CAPABILITY,
             ]
             .contains(&s.as_str())
         });
@@ -1597,6 +1769,8 @@ async fn prepare(State(app): State<App>, Json(request): Json<Prepare>) -> ApiRes
             page_size: 200,
             policy: request.policy.clone(),
             now: omd_store::now(),
+            // A direct preparation names releases only, not where they were listed.
+            collection_hint: None,
         };
         let resolved: ResolvedRelease = app
             .runtime
@@ -1606,6 +1780,12 @@ async fn prepare(State(app): State<App>, Json(request): Json<Prepare>) -> ApiRes
             || resolved.collection.reference.provider != provider.manifest.id
             || !request.policy.accepts(&resolved.release)
         {
+            let collections = [&resolved.release.collection, &resolved.collection.reference];
+            let own: Vec<_> = collections
+                .into_iter()
+                .filter(|c| c.provider == provider.manifest.id)
+                .collect();
+            forget_stale_enumerations(&app, &own).await;
             return Err(problem(
                 StatusCode::CONFLICT,
                 "selection_changed",
@@ -2101,6 +2281,7 @@ async fn cache_subscription_collection(
         page_size: 100,
         policy: request.policy.clone(),
         now: omd_store::now(),
+        collection_hint: None,
     };
     let collection: Collection = app
         .runtime
@@ -2222,14 +2403,33 @@ async fn run_subscription_actions(app: App) {
                     page_size: 200,
                     policy: request.policy.clone(),
                     now: omd_store::now(),
+                    // The subscribed collection the scan listed this release under.
+                    collection_hint: Some(release.collection.clone()),
                 };
                 let resolved: ResolvedRelease = app
                     .runtime
                     .invoke(&source, &input, &app.shutdown.child_token())
                     .await?;
+                // A source that reads the collection hint must, as for a batch,
+                // keep the release in the collection it was listed under: the
+                // subscribed collection (scans keep only its own releases). A
+                // release that resolves as its own item (an image post, or
+                // another standalone item) has no parent collection to move to;
+                // it keeps that identity, as image snapshots record it. Sources
+                // without the capability keep the earlier rule: they may file a
+                // followed release under another collection.
+                let checks_collection = source.manifest.accepts_collection_hint();
+                let own_item = resolved.collection.kind == omd_domain::CollectionKind::Item
+                    && resolved.release.collection == resolved.collection.reference;
                 if resolved.release.reference != release.reference
+                    || (checks_collection
+                        && resolved.release.collection != request.target
+                        && !own_item)
                     || !request.policy.accepts(&resolved.release)
                 {
+                    if checks_collection {
+                        forget_stale_enumerations(&app, &[&request.target]).await;
+                    }
                     return Err(problem(
                         StatusCode::CONFLICT,
                         "subscription_selection_changed",
@@ -2336,6 +2536,8 @@ async fn execute_job(app: &App, original: &Job, token: &CancellationToken) -> Re
             page_size: 200,
             policy: job.plan.policy.clone(),
             now: omd_store::now(),
+            // The approved plan's collection; `refresh` still requires it back.
+            collection_hint: Some(job.plan.collection.reference.clone()),
         };
         let resolved = app
             .runtime
@@ -2358,6 +2560,11 @@ async fn execute_job(app: &App, original: &Job, token: &CancellationToken) -> Re
         .await
         .map_err(|e| e.1)?;
         if job.plan.refresh(&replacement).is_err() {
+            forget_stale_enumerations(
+                app,
+                &[&job.plan.release.collection, &job.plan.collection.reference],
+            )
+            .await;
             return Err(Problem{code:"selection_changed".into(),message:"The source changed the approved outputs. Prepare this release again before downloading.".into(),retryable:false,actions:vec!["prepare_again".into()]});
         }
         job = app
@@ -2754,5 +2961,34 @@ mod display_path_tests {
             (shown.id, shown.label, shown.available),
             (stored.id, stored.label, stored.available)
         );
+    }
+}
+
+#[cfg(test)]
+mod sign_in_helper_tests {
+    #[test]
+    fn the_sign_in_helper_is_the_bundled_app_only_on_macos_when_installed() {
+        let root = tempfile::tempdir().unwrap();
+        let engine = root.path().join("omd-engine");
+        let bare = root.path().join(if cfg!(windows) {
+            "omd-signin.exe"
+        } else {
+            "omd-signin"
+        });
+        assert_eq!(super::sign_in_helper(&engine), bare);
+        let bundle = root
+            .path()
+            .join(super::SIGN_IN_BUNDLE)
+            .join("Contents/MacOS");
+        // A bundle folder without its executable is not used.
+        std::fs::create_dir_all(&bundle).unwrap();
+        assert_eq!(super::sign_in_helper(&engine), bare);
+        std::fs::write(bundle.join("omd-signin"), b"").unwrap();
+        let expected = if cfg!(target_os = "macos") {
+            bundle.join("omd-signin")
+        } else {
+            bare
+        };
+        assert_eq!(super::sign_in_helper(&engine), expected);
     }
 }

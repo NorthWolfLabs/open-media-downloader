@@ -1579,6 +1579,18 @@ export interface components {
             credential_profile?: string | null;
             url: string;
         };
+        AttachQuery: {
+            /**
+             * @description When this client is the last to leave and background operation is off,
+             *     keep the engine running until no download is queued or running, then
+             *     stop. Without it, the engine stops soon after the last client leaves and
+             *     unfinished downloads continue at its next start. Command-line and agent
+             *     clients that submit work and leave set it; an interactive application
+             *     whose window close should stop downloads leaves it unset.
+             * @default false
+             */
+            finish_downloads: boolean;
+        };
         /** @enum {string} */
         Availability: "available" | "external" | "authentication_required" | "unavailable" | "unknown";
         BatchRequest: {
@@ -1646,6 +1658,11 @@ export interface components {
             id: string;
         };
         ClientLease: {
+            /**
+             * @description Whether the engine recorded `finish_downloads` for this client. Absent
+             *     on engines released before that attach option.
+             */
+            finish_downloads?: boolean | null;
             /** Format: uint32 */
             heartbeat_seconds: number;
             id: string;
@@ -2382,6 +2399,11 @@ export interface components {
             api: string;
             /** @default false */
             browser: boolean;
+            /**
+             * @description The operations this source implements (such as `search`, `releases`
+             *     and `resolve`), plus `collection_hint` when its `resolve` reads the
+             *     request's `collection_hint`.
+             */
             capabilities: string[];
             description: string;
             grants: components["schemas"]["HostGrant"][];
@@ -3194,7 +3216,9 @@ export interface operations {
     };
     attachClient: {
         parameters: {
-            query?: never;
+            query?: {
+                finish_downloads?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;

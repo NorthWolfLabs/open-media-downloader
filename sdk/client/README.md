@@ -25,8 +25,12 @@ Engine errors throw `EngineError` with status, code, retryability and recovery a
 
 Call `attach()` and heartbeat at the returned interval. Detach when your client
 closes. With background operation disabled, the last client's departure allows
-the engine to checkpoint and stop. A restarted engine publishes a new endpoint
-and tokens; reopen its instance file instead of retrying obsolete credentials.
+the engine to checkpoint and stop; unfinished downloads continue at its next
+start. A client that submits downloads and then leaves, such as a command-line
+tool or an agent, calls `attach({finish_downloads: true})` instead: when it is
+the last client to leave, the engine first finishes queued and running
+downloads. A restarted engine publishes a new endpoint and tokens; reopen its
+instance file instead of retrying obsolete credentials.
 
 For event synchronization, read `/v2/service` to obtain an event cursor **before**
 loading resource lists, then subscribe from that cursor. Replayed invalidations

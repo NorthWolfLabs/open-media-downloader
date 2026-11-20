@@ -123,7 +123,8 @@ Settings, naming, metadata overrides, notifications, destination checks, relocat
 and file maintenance mirror the public API. Preview file operations and relocations,
 inspect all entries, then explicitly start. Background operation/startup integration,
 notifications, deletion, relocation and shutdown require relevant user intent.
-Without background mode the final client lease's departure permits engine exit;
+Without background mode the final client lease's departure permits engine exit
+once downloads queued or running finish (MCP asks for that when it attaches);
 MCP does not silently enable background operation or start an engine.
 Desktop-only theme/layout/display-cache settings are local to that UI, not engine
 state. Agents use the same engine operations; MCP does not manipulate desktop widgets.

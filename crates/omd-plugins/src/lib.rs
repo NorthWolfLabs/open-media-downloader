@@ -43,6 +43,124 @@ pub enum PluginError {
 }
 pub type Result<T> = std::result::Result<T, PluginError>;
 
+/// Which limit stopped a source invocation with [`PluginError::Budget`]. The
+/// engine log records it; the public problem and the plugin never see it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BudgetLimit {
+    /// The whole invocation's deadline, from authorization to the result.
+    Invocation,
+    /// The worker exchange's deadline, after queueing and package verification.
+    Worker,
+    /// The worker's fuel allowance for executing plugin code.
+    Fuel,
+    /// The worker's execution-epoch deadline: time spent executing plugin code.
+    Epoch,
+    /// The number of broker calls one invocation may make.
+    BrokerCalls,
+    /// A frame, result-size or store resource limit of the worker exchange.
+    Resource,
+    /// The deadline of a host operation run under the source's authority,
+    /// such as an artwork fetch or a media preparation.
+    HostOperation,
+}
+impl BudgetLimit {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Invocation => "invocation_deadline",
+            Self::Worker => "worker_deadline",
+            Self::Fuel => "fuel",
+            Self::Epoch => "epoch",
+            Self::BrokerCalls => "broker_calls",
+            Self::Resource => "worker_resource",
+            Self::HostOperation => "host_operation_deadline",
+        }
+    }
+    /// Classifies a worker failure frame. `None` means it was not a budget
+    /// failure. The worker names fuel and epoch traps; older wording is
+    /// matched as before so the public result does not change.
+    pub fn from_worker_failure(message: &Value) -> Option<Self> {
+        let error = message.get("error").and_then(Value::as_str).unwrap_or("");
+        match message.get("limit").and_then(Value::as_str) {
+            Some("fuel") => Some(Self::Fuel),
+            Some("epoch") => Some(Self::Epoch),
+            _ if error.contains("fuel") => Some(Self::Fuel),
+            _ if error.contains("interrupt") => Some(Self::Epoch),
+            _ if error.contains("limit") => Some(Self::Resource),
+            _ => None,
+        }
+    }
+}
+
+/// Where one invocation has spent its time so far. The outer deadline drops
+/// the invocation's future, so this lives outside it to attribute the failure.
+#[derive(Debug, Default)]
+struct Progress {
+    phase: &'static str,
+    session_ms: u128,
+    queue_ms: u128,
+    verification_ms: u128,
+    worker_started: Option<std::time::Instant>,
+    reused_worker: bool,
+    broker_calls: u32,
+    broker_ms: u128,
+    inspection_ms: u128,
+    worker_timing: Value,
+    /// The limit already recorded. The outer deadline can expire while the
+    /// invocation is still stopping its worker after its own limit fired.
+    recorded: Option<BudgetLimit>,
+}
+impl Progress {
+    fn update(cell: &std::sync::Mutex<Self>, change: impl FnOnce(&mut Self)) {
+        change(
+            &mut cell
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+    }
+}
+
+/// Records which limit stopped an invocation, with the time spent in each
+/// phase, once per invocation: the first limit to fire is the one recorded.
+/// Identity and operation names and durations only: never payloads, URLs,
+/// worker diagnostics, account data or anything the plugin returned.
+fn log_budget(
+    provider: &Provider,
+    request: &ProviderRequest,
+    limit: BudgetLimit,
+    deadline: Duration,
+    started: std::time::Instant,
+    progress: &std::sync::Mutex<Progress>,
+) {
+    let mut progress = progress
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if progress.recorded.is_some() {
+        return;
+    }
+    progress.recorded = Some(limit);
+    let worker_ms = progress
+        .worker_started
+        .map(|started| started.elapsed().as_millis());
+    tracing::warn!(
+        source = %provider.manifest.id,
+        operation = %request.operation,
+        limit = limit.as_str(),
+        phase = progress.phase,
+        deadline_ms = deadline.as_millis(),
+        elapsed_ms = started.elapsed().as_millis(),
+        session_ms = progress.session_ms,
+        queue_ms = progress.queue_ms,
+        verification_ms = progress.verification_ms,
+        worker_ms,
+        reused_worker = progress.reused_worker,
+        broker_calls = progress.broker_calls,
+        broker_ms = progress.broker_ms,
+        inspection_ms = progress.inspection_ms,
+        worker = ?progress.worker_timing,
+        "Source exceeded its execution budget"
+    );
+}
+
 #[derive(Clone)]
 pub struct Provider {
     pub manifest: ProviderManifest,
@@ -207,7 +325,28 @@ impl Runtime {
         timeout: Duration,
         operation: impl std::future::Future<Output = T>,
     ) -> Result<T> {
-        let timeout = self.network.bandwidth.operation_timeout(timeout).await;
+        let started = std::time::Instant::now();
+        let deadline = self.network.bandwidth.operation_timeout(timeout).await;
+        let result = self.within(provider, cancel, deadline, operation).await;
+        if matches!(result, Err(PluginError::Budget)) {
+            tracing::warn!(
+                source = %provider.manifest.id,
+                limit = BudgetLimit::HostOperation.as_str(),
+                deadline_ms = deadline.as_millis(),
+                elapsed_ms = started.elapsed().as_millis(),
+                "Source exceeded its execution budget"
+            );
+        }
+        result
+    }
+    /// [`Self::authorized`] with its deadline already adjusted for throttling.
+    async fn within<T>(
+        &self,
+        provider: &Provider,
+        cancel: &CancellationToken,
+        timeout: Duration,
+        operation: impl std::future::Future<Output = T>,
+    ) -> Result<T> {
         let guard = self
             .authority
             .enter(&provider.manifest.id, &provider.digest)?;
@@ -260,21 +399,48 @@ impl Runtime {
         request: &ProviderRequest,
         cancel: &CancellationToken,
     ) -> Result<T> {
-        self.authorized(
-            provider,
-            cancel,
-            Duration::from_secs(60),
-            self.invoke_inner(provider, request, cancel),
-        )
-        .await?
+        const ALLOWANCE: Duration = Duration::from_secs(60);
+        let started = std::time::Instant::now();
+        let progress = std::sync::Mutex::new(Progress {
+            phase: "authorization",
+            ..Progress::default()
+        });
+        let deadline = self.network.bandwidth.operation_timeout(ALLOWANCE).await;
+        let result = self
+            .within(
+                provider,
+                cancel,
+                deadline,
+                self.invoke_inner(provider, request, cancel, &progress),
+            )
+            .await;
+        match result {
+            Ok(result) => result,
+            // Only the outer deadline yields `Budget` here; the invocation's
+            // own limits arrive inside `Ok`.
+            Err(PluginError::Budget) => {
+                log_budget(
+                    provider,
+                    request,
+                    BudgetLimit::Invocation,
+                    deadline,
+                    started,
+                    &progress,
+                );
+                Err(PluginError::Budget)
+            }
+            Err(error) => Err(error),
+        }
     }
     async fn invoke_inner<T: serde::de::DeserializeOwned>(
         &self,
         provider: &Provider,
         request: &ProviderRequest,
         cancel: &CancellationToken,
+        progress: &std::sync::Mutex<Progress>,
     ) -> Result<T> {
         let started = std::time::Instant::now();
+        Progress::update(progress, |p| p.phase = "session");
         if !provider.manifest.capabilities.contains(&request.operation) {
             return Err(PluginError::Unsupported);
         }
@@ -297,11 +463,23 @@ impl Runtime {
             .await
             .map_err(network_error)?;
         let queue_started = std::time::Instant::now();
+        Progress::update(progress, |p| {
+            p.session_ms = queue_started.duration_since(started).as_millis();
+            p.phase = "queue";
+        });
         let _permit = tokio::select! {_ = cancel.cancelled()=>return Err(PluginError::Canceled), permit=self.permits.acquire()=>permit.map_err(|_|PluginError::Worker)?};
         let queue_ms = queue_started.elapsed().as_millis();
         let verification_started = std::time::Instant::now();
+        Progress::update(progress, |p| {
+            p.queue_ms = queue_ms;
+            p.phase = "verification";
+        });
         provider.verify().await?;
         let verification_ms = verification_started.elapsed().as_millis();
+        Progress::update(progress, |p| {
+            p.verification_ms = verification_ms;
+            p.phase = "worker_start";
+        });
         let worker = {
             let mut idle = self.idle.lock().await;
             idle.retain_mut(|w| {
@@ -311,6 +489,7 @@ impl Runtime {
                 .position(|w| w.provider == provider.manifest.id && w.digest == provider.digest)
                 .map(|index| idle.swap_remove(index))
         };
+        let reused_worker = worker.is_some();
         let (mut child, mut input, mut output) = if let Some(worker) = worker {
             (worker.child, worker.input, worker.output)
         } else {
@@ -328,18 +507,31 @@ impl Runtime {
         };
         let mut broker_ms = 0u128;
         let mut worker_timing = Value::Null;
+        // Set by each budget failure the exchange detects itself; an
+        // unattributed `Budget` there is a frame limit.
+        let mut limit = None;
+        Progress::update(progress, |p| {
+            p.worker_started = Some(std::time::Instant::now());
+            p.reused_worker = reused_worker;
+            p.phase = "worker";
+        });
         let operation = async {
-            write_frame(&mut input,&json!({"component":provider.component,"cache_config":self.cache_config,"reuse":true,"payload":serde_json::to_string(request).map_err(|_|PluginError::Invalid)?})).await?;
+            // A source receives the collection hint only when it declared it.
+            let payload = serde_json::to_string(&request.for_source(&provider.manifest))
+                .map_err(|_| PluginError::Invalid)?;
+            write_frame(&mut input,&json!({"component":provider.component,"cache_config":self.cache_config,"reuse":true,"payload":payload})).await?;
             let mut calls = 0;
             let mut browser_session: Option<omd_browser::Session> = None;
             loop {
                 let message = read_frame(&mut output).await?;
                 if let Some(timing) = message.get("timing") {
                     worker_timing = timing.clone();
+                    Progress::update(progress, |p| p.worker_timing = timing.clone());
                 }
                 if let Some(broker) = message.get("broker") {
                     calls += 1;
                     if calls > 128 {
+                        limit = Some(BudgetLimit::BrokerCalls);
                         return Err(PluginError::Budget);
                     }
                     let operation = broker
@@ -351,6 +543,11 @@ impl Runtime {
                         .and_then(Value::as_str)
                         .ok_or(PluginError::Invalid)?;
                     let broker_started = std::time::Instant::now();
+                    let inspection = operation == "media.inspect";
+                    Progress::update(progress, |p| {
+                        p.broker_calls = calls;
+                        p.phase = if inspection { "inspection" } else { "broker" };
+                    });
                     let response = if operation.starts_with("browser.") {
                         if !provider.manifest.browser {
                             Err(PluginError::Unsupported)
@@ -418,7 +615,15 @@ impl Runtime {
                         )
                         .await
                     };
-                    broker_ms += broker_started.elapsed().as_millis();
+                    let call_ms = broker_started.elapsed().as_millis();
+                    broker_ms += call_ms;
+                    Progress::update(progress, |p| {
+                        p.broker_ms += call_ms;
+                        if inspection {
+                            p.inspection_ms += call_ms;
+                        }
+                        p.phase = "worker";
+                    });
                     if let Err(PluginError::Credential(error)) = response {
                         return Err(PluginError::Credential(error));
                     }
@@ -462,16 +667,12 @@ impl Runtime {
                     return Err(PluginError::Source(problem));
                 } else if let Some(error) = message.get("error").and_then(Value::as_str) {
                     tracing::debug!(diagnostic=%error.chars().take(2000).collect::<String>(),"plugin worker failed");
-                    return Err(
-                        if error.contains("fuel")
-                            || error.contains("interrupt")
-                            || error.contains("limit")
-                        {
-                            PluginError::Budget
-                        } else {
-                            PluginError::Worker
-                        },
-                    );
+                    limit = BudgetLimit::from_worker_failure(&message);
+                    return Err(if limit.is_some() {
+                        PluginError::Budget
+                    } else {
+                        PluginError::Worker
+                    });
                 } else {
                     return Err(PluginError::Invalid);
                 }
@@ -482,7 +683,18 @@ impl Runtime {
             .bandwidth
             .operation_timeout(Duration::from_secs(60))
             .await;
-        let result = tokio::select! {_ = cancel.cancelled()=>Err(PluginError::Canceled),value=tokio::time::timeout(timeout,operation)=>value.unwrap_or(Err(PluginError::Budget))};
+        let result = tokio::select! {_ = cancel.cancelled()=>Err(PluginError::Canceled),value=tokio::time::timeout(timeout,operation)=>value.unwrap_or_else(|_|{limit=Some(BudgetLimit::Worker);Err(PluginError::Budget)})};
+        if matches!(result, Err(PluginError::Budget)) {
+            Progress::update(progress, |p| p.broker_ms = broker_ms);
+            log_budget(
+                provider,
+                request,
+                limit.unwrap_or(BudgetLimit::Resource),
+                timeout,
+                started,
+                progress,
+            );
+        }
         let total_ms = started.elapsed().as_millis();
         tracing::debug!(source=%provider.manifest.id, operation=%request.operation, total_ms, queue_ms, verification_ms, broker_ms, worker=?worker_timing, success=result.is_ok(), "Source operation timing");
         if total_ms.saturating_sub(broker_ms) > 500 {
@@ -688,4 +900,66 @@ fn bind_credentials(
     }
     *value = serde_json::to_value(resolved).map_err(|_| PluginError::Invalid)?;
     Ok(())
+}
+#[cfg(test)]
+mod budget_tests {
+    use super::*;
+
+    #[test]
+    fn worker_failures_name_the_limit_that_fired() {
+        let classify = |frame: Value| BudgetLimit::from_worker_failure(&frame);
+        // The worker names fuel and epoch traps.
+        assert_eq!(
+            classify(json!({"error":"error while executing","limit":"fuel"})),
+            Some(BudgetLimit::Fuel)
+        );
+        assert_eq!(
+            classify(json!({"error":"error while executing","limit":"epoch"})),
+            Some(BudgetLimit::Epoch)
+        );
+        // Wording from a worker that does not name the limit still counts.
+        assert_eq!(
+            classify(json!({"error":"wasm trap: all fuel consumed by WebAssembly"})),
+            Some(BudgetLimit::Fuel)
+        );
+        assert_eq!(
+            classify(json!({"error":"wasm trap: interrupt"})),
+            Some(BudgetLimit::Epoch)
+        );
+        assert_eq!(
+            classify(json!({"error":"Provider result exceeds limit"})),
+            Some(BudgetLimit::Resource)
+        );
+        // Anything else is a worker failure, not a budget.
+        assert_eq!(classify(json!({"error":"Compile provider: bad"})), None);
+        assert_eq!(classify(json!({"error":"x","limit":"unknown"})), None);
+    }
+
+    #[test]
+    fn limit_names_are_stable_log_values() {
+        let names: Vec<_> = [
+            BudgetLimit::Invocation,
+            BudgetLimit::Worker,
+            BudgetLimit::Fuel,
+            BudgetLimit::Epoch,
+            BudgetLimit::BrokerCalls,
+            BudgetLimit::Resource,
+            BudgetLimit::HostOperation,
+        ]
+        .into_iter()
+        .map(BudgetLimit::as_str)
+        .collect();
+        assert_eq!(
+            names,
+            [
+                "invocation_deadline",
+                "worker_deadline",
+                "fuel",
+                "epoch",
+                "broker_calls",
+                "worker_resource",
+                "host_operation_deadline"
+            ]
+        );
+    }
 }

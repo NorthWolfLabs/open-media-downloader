@@ -234,7 +234,7 @@ class Fixture:
         archives = {
             'cpython': ('Python-3.13.14.tar.xz', tarxz('Python-3.13.14', {'README.rst': b'cpython'})),
             'xz': ('xz-5.2.3.tar.gz', targz('xz-5.2.3', {'configure': b'#!/bin/sh\n'})),
-            'sdist:yt-dlp': ('yt_dlp-2026.8.19.tar.gz', targz('yt_dlp-2026.8.19', {'PKG-INFO': b'yt-dlp'})),
+            'sdist:yt-dlp': ('yt_dlp-2026.10.26.tar.gz', targz('yt_dlp-2026.10.26', {'PKG-INFO': b'yt-dlp'})),
             'sdist:mutagen': ('mutagen-1.48.1.tar.gz', targz('mutagen-1.48.1', {'PKG-INFO': b'mutagen'})),
             'sdist:yt-dlp-ejs': ('yt_dlp_ejs-0.8.0.tar.gz', targz('yt_dlp_ejs-0.8.0', {'package-lock.json': json.dumps(lock).encode(), 'LICENSE': b'Unlicense'})),
             'sdist:pyinstaller': ('pyinstaller-6.22.0.tar.gz', targz('pyinstaller-6.22.0', {'COPYING.txt': b'GPL with exception'})),
@@ -243,7 +243,7 @@ class Fixture:
             'tool:flit-core': ('flit_core-4.0.2-py3-none-any.whl', wheel({'flit_core/__init__.py': b''})),
         }
         meta = {'cpython': ('cpython', 'cpython', 'shipped-source', '3.13.14'), 'xz': ('native', 'xz', 'shipped-source', '5.2.3'),
-                'sdist:yt-dlp': ('sdist', 'yt-dlp', 'shipped-source', '2026.8.19'), 'sdist:mutagen': ('sdist', 'mutagen', 'shipped-source', '1.48.1'),
+                'sdist:yt-dlp': ('sdist', 'yt-dlp', 'shipped-source', '2026.10.26'), 'sdist:mutagen': ('sdist', 'mutagen', 'shipped-source', '1.48.1'),
                 'sdist:yt-dlp-ejs': ('sdist', 'yt-dlp-ejs', 'shipped-source', '0.8.0'), 'sdist:pyinstaller': ('sdist', 'pyinstaller', 'shipped-source', '6.22.0'),
                 'sdist:altgraph': ('sdist', 'altgraph', 'packaging-source', '0.17.5'), 'tool:node': ('node', 'node', 'build-tool', '24.20.0'),
                 'tool:flit-core': ('wheel', 'flit-core', 'build-tool', '4.0.2')}
@@ -263,7 +263,7 @@ class Fixture:
         (self.repo / 'LICENSE').write_text('MIT\n')
         (self.repo / 'distribution/yt-dlp/.python-version').write_text('3.13.14\n')
         (self.repo / 'distribution/yt-dlp/pyproject.toml').write_text(
-            '[project]\nname = "x"\nversion = "0"\nrequires-python = "==3.13.*"\ndependencies = ["yt-dlp[default]==2026.8.19", "pyinstaller==6.22.2"]\n')
+            '[project]\nname = "x"\nversion = "0"\nrequires-python = "==3.13.*"\ndependencies = ["yt-dlp[default]==2026.10.26", "pyinstaller==6.22.2"]\n')
         self.write_lock()
 
     def write_source(self, name, data):
@@ -281,7 +281,7 @@ class Fixture:
         def sdist(ident):
             row = self.row(ident)
             return f'sdist = {{ url = "https://files.example/{row["file"]}", hash = "sha256:{row["sha256"]}", size = {row["bytes"]} }}'
-        versions = {'yt-dlp': '2026.8.19', 'mutagen': '1.48.1', 'yt-dlp-ejs': '0.8.0', 'pyinstaller': '6.22.2', 'altgraph': '0.17.5', **(overrides or {})}
+        versions = {'yt-dlp': '2026.10.26', 'mutagen': '1.48.1', 'yt-dlp-ejs': '0.8.0', 'pyinstaller': '6.22.2', 'altgraph': '0.17.5', **(overrides or {})}
         text = f'''version = 1
 [[package]]
 name = "yt-dlp"
@@ -881,6 +881,26 @@ class KitGuards(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     source.verify_kit(bad)
 
+    def test_kit_tooling_is_closed_under_first_party_imports(self):
+        """A recipient runs the kit's own scripts: every first-party module that kit tooling
+        imports when it loads must itself be kit tooling (function-local imports belong to
+        routes the kit commands do not take)."""
+        import ast
+        first_party = {p.stem for p in source.SCRIPTS.glob('*.py')}
+        for name in source.KIT_TOOLING:
+            tree = ast.parse((source.SCRIPTS / name).read_text())
+            loaded = set()
+            for node in tree.body:
+                for sub in ast.walk(node) if isinstance(node, (ast.If, ast.Try)) else [node]:
+                    if isinstance(sub, ast.Import):
+                        loaded |= {a.name.split('.')[0] for a in sub.names}
+                    elif isinstance(sub, ast.ImportFrom) and sub.module and not sub.level:
+                        loaded.add(sub.module.split('.')[0])
+            for module in sorted(loaded & first_party):
+                with self.subTest(tool=name, module=module):
+                    self.assertIn(f'{module}.py', source.KIT_TOOLING)
+        self.assertIn('signin_bundle.py', source.TOOLING)
+
     def test_kit_refuses_host_paths_and_unbuilt_receipts(self):
         self.receipt({'status': 'built', 'plan_sha256': source.file_sha(self.plan), 'output': {'sha256': 'ab' * 32}, 'log': '/Users/someone/build.log'})
         with self.assertRaisesRegex(ValueError, 'host path'):
@@ -909,10 +929,14 @@ def recipe_archive(deps, patches, extra_vars='', top='curl-impersonate-000000000
         if f'patches/{name}.patch' in patches:
             lines.append(f'_track_external_project_patch({name} _p _c)')
         lines += [f'ExternalProject_Add({name}', f'  URL "${{{name.upper()}_URL}}"', ')']
-    files = {'CMakeLists.txt': ('\n'.join(lines) + '\n').encode(), **patches}
+    files = {'CMakeLists.txt': ('\n'.join(lines) + '\n').encode(), **RECIPE_CMAKE, **patches}
     return targz(top, files)
 
 
+PC_TEMPLATE = (b'prefix=${pcfiledir}\nlibdir=${prefix}\nincludedir=${prefix}/include\n\nName: libcurl-impersonate\n'
+               b'Description: libcurl with browser impersonation support\nURL: https://github.com/lexiforest/curl-impersonate\nVersion: @CURL_VERSION@\n'
+               b'Libs: -L${libdir} -lcurl-impersonate\nLibs.private: @CURL_SYSTEM_LIBS@\nCflags: -I${includedir}\nCflags.private: -DCURL_STATICLIB\n')
+RECIPE_CMAKE = {'cmake/ReleasePkgConfig.cmake': b'find_program(PKG_CONFIG pkg-config REQUIRED)\n', 'cmake/libcurl-impersonate.pc.in': PC_TEMPLATE}
 CURL_PATCH = b'diff --git a/lib/a.c b/lib/a.c\n--- a/lib/a.c\n+++ b/lib/a.c\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/lib/b.c b/lib/b.c\n--- a/lib/b.c\n+++ b/lib/b.c\n@@ -1 +1 @@\n-c\n+d\n'
 
 
@@ -931,6 +955,7 @@ class CurlFixture(Fixture):
             'sdist:curl-cffi': ('sdist', 'curl-cffi', 'shipped-source', '0.16.0', 'curl_cffi-0.16.0.tar.gz', targz('curl_cffi-0.16.0', {'LICENSE': b'MIT'})),
             'tool:cmake': ('tool-source', 'cmake', 'build-tool', '4.4.3', 'cmake-4.4.3.tar.gz', targz('cmake-4.4.3', {'bootstrap': b'#!/bin/sh\n'})),
             'tool:ninja': ('tool-source', 'ninja', 'build-tool', '1.13.2', 'v1.13.2.tar.gz', targz('ninja-1.13.2', {'CMakeLists.txt': b''})),
+            'tool:pkgconf': ('tool-source', 'pkgconf', 'build-tool', '3.0.6', 'pkgconf-3.0.6.tar.gz', targz('pkgconf-3.0.6', {'configure': b'#!/bin/sh\n'})),
             'curl:zlib': ('curl-dep', 'zlib', 'shipped-source', '1.3.1', 'zlib-1.3.1.tar.gz', targz('zlib-1.3.1', {'LICENSE': b'zlib'})),
             'curl:curl': ('curl-dep', 'curl', 'shipped-source', '8.21.0', 'curl-8_21_0.tar.gz', targz('curl-curl-8_21_0', {'COPYING': b'curl'})),
         }
@@ -949,7 +974,7 @@ class CurlFixture(Fixture):
         (self.repo / 'distribution/yt-dlp-source-curl/.python-version').write_text('3.13.14\n')
         (self.repo / 'distribution/yt-dlp-source-curl/pyproject.toml').write_text(
             '[project]\nname = "x"\nversion = "0"\nrequires-python = "==3.13.*"\n'
-            'dependencies = ["yt-dlp[default,curl-cffi,pin-curl-cffi]==2026.8.19", "pyinstaller==6.22.0"]\n')
+            'dependencies = ["yt-dlp[default,curl-cffi,pin-curl-cffi]==2026.10.26", "pyinstaller==6.22.0"]\n')
         (self.repo / 'distribution/yt-dlp-source-curl/README.md').write_text('# curl fixture\n')
         self.write_curl_lock()
 
@@ -978,7 +1003,7 @@ class CurlFixture(Fixture):
         profile['tools'] = [{**t, 'steps': [['/usr/bin/true']]} for t in profile['tools']]
         cur = profile['impersonate']
         cur['dependencies'] = [{'input': f'curl:{n}', 'project': n, 'url_variable': f'{n.upper()}_URL', 'hash_variable': f'{n.upper()}_URL_HASH'} for n in self.deps]
-        cur['recipe_files'] = {'CMakeLists.txt': digest(archive_member(self.recipe, 'CMakeLists.txt'))}
+        cur['recipe_files'] = {rel: digest(archive_member(self.recipe, rel)) for rel in ['CMakeLists.txt', *RECIPE_CMAKE]}
         cur['patches'] = {'patches/curl.patch': digest(CURL_PATCH)}
         cur['unused_patches'] = {'patches/OpenBSD.patch': digest(b'unused\n')}
         cur['steps'] = [['/usr/bin/true']]
@@ -991,7 +1016,7 @@ class CurlFixture(Fixture):
         def sdist(ident):
             row = self.row_of(self.inputs, ident)
             return f'sdist = {{ url = "https://files.example/{row["file"]}", hash = "sha256:{row["sha256"]}", size = {row["bytes"]} }}'
-        packages = [('yt-dlp', '2026.8.19', 'sdist:yt-dlp', None), ('mutagen', '1.48.1', 'sdist:mutagen', None), ('yt-dlp-ejs', '0.8.0', 'sdist:yt-dlp-ejs', None),
+        packages = [('yt-dlp', '2026.10.26', 'sdist:yt-dlp', None), ('mutagen', '1.48.1', 'sdist:mutagen', None), ('yt-dlp-ejs', '0.8.0', 'sdist:yt-dlp-ejs', None),
                     ('curl-cffi', '0.16.0', 'sdist:curl-cffi', '[{ name = "cffi" }]'), ('cffi', '2.1.1', 'sdist:cffi', '[{ name = "pycparser", marker = "implementation_name != \'PyPy\'" }]'),
                     ('pycparser', '3.0', 'sdist:pycparser', None), ('pyinstaller', '6.22.0', 'sdist:pyinstaller', '[{ name = "altgraph" }]'),
                     ('altgraph', '0.17.5', 'sdist:altgraph', None)]
@@ -1096,6 +1121,29 @@ class CurlPlanGuards(unittest.TestCase):
             (lambda p: p['impersonate']['release'].update(tool='/opt/homebrew/bin/libtool'), 'Invalid release section'),
             (lambda p: p['impersonate']['environment'].update(CFLAGS='-O0 -DCURL_DISABLE_VERIFY'), 'may only remap source paths'),
             (lambda p: p['impersonate']['environment'].update(LDFLAGS='-L/opt/homebrew/lib'), 'may only remap source paths'),
+            # pkg-config is only the recorded link of a source-built tool, never a host tool.
+            (lambda p: p['impersonate'].update(pkg_config='/opt/homebrew/bin'), 'pkg-config must be a recorded link'),
+            (lambda p: p['impersonate'].update(pkg_config='{tools}/bin'), 'pkg-config must be a recorded link'),
+            (lambda p: p['impersonate'].update(pkg_config='{tools}/../bin'), 'pkg-config must be a recorded link|relative'),
+            (lambda p: p['tools'][-1].pop('links'), 'pkg-config must be a recorded link'),
+            (lambda p: p['tools'][-1].update(links={'pkgconf/bin/pkg-config': '../../../../opt/homebrew/bin/pkg-config'}), 'A tool link must name a product'),
+            (lambda p: p['tools'][-1].update(links={'pkgconf/bin/pkg-config': 'pkg-config'}), 'A tool link must name a product'),
+            (lambda p: p['tools'][-1].update(links={'bin/pkg-config': 'pkgconf'}), 'A tool link must name a product'),
+            (lambda p: p['tools'][-1].update(unexpected=True), 'Invalid tool recipe'),
+            # The release pkg-config file may add OS frameworks and libraries only.
+            (lambda p: p['impersonate']['release']['pkgconfig']['libs_private'].append('-L/opt/homebrew/lib'), 'only OS frameworks and libraries'),
+            (lambda p: p['impersonate']['release']['pkgconfig']['libs_private'].append('/tmp/libz.a'), 'only OS frameworks and libraries'),
+            (lambda p: p['impersonate']['release']['pkgconfig']['libs_private'].append('-lssl'), 'only OS frameworks and libraries'),
+            (lambda p: p['impersonate']['release']['pkgconfig']['libs_private'].append('-lcurl-impersonate'), 'only OS frameworks and libraries'),
+            (lambda p: p['impersonate']['release']['pkgconfig']['libs_private'].append('-framework'), 'only OS frameworks and libraries'),
+            (lambda p: p['impersonate']['release']['pkgconfig']['libs_private'].extend(['-framework', '../Evil']), 'only OS frameworks and libraries'),
+            (lambda p: p['impersonate']['release']['pkgconfig'].update(libs_private=[]), 'Invalid expected Libs.private'),
+            (lambda p: p['impersonate']['release']['pkgconfig'].update(script='cmake/Other.cmake'), 'must be pinned recipe files'),
+            (lambda p: p['impersonate']['release']['pkgconfig'].update(template='cmake/other.pc.in'), 'must be pinned recipe files'),
+            (lambda p: p['impersonate']['release']['pkgconfig'].update(output='{impersonate}/lib/pkgconfig/libcurl-impersonate.pc'), 'must sit beside'),
+            (lambda p: p['impersonate']['release']['pkgconfig'].pop('dependency_prefix'), 'Invalid release pkg-config section'),
+            (lambda p: p['impersonate']['release'].pop('pkgconfig'), 'Invalid release section'),
+            (lambda p: p['impersonate']['release']['archives'].append('{superbuild}/deps/install/lib/libz.a'), 'distinct lib'),
         ]
         for mutate, pattern in cases:
             with self.subTest(pattern=pattern):
@@ -1227,7 +1275,7 @@ class CurlEvidenceGuards(unittest.TestCase):
         table += [f'{client:<16}{system:<13}curl_cffi' for client, system in expected['impersonate_targets']]
         verbose = {'Request Handlers': expected['request_handlers'], 'Optional libraries': expected['optional_libraries']}
         report = source.check_capabilities(expected, table, verbose)
-        self.assertEqual((report['targets'], report['families']), (37, ['Chrome', 'Edge', 'Firefox', 'Safari', 'Tor']))
+        self.assertEqual((report['targets'], report['families']), (len(expected['impersonate_targets']), ['Chrome', 'Edge', 'Firefox', 'Safari', 'Tor']))
         cases = {'missing target': (table[:-1], verbose, 'Missing impersonate targets'),
                  'unavailable target': (table[:-1] + [table[-1].replace('curl_cffi', 'curl_cffi (unavailable)')], verbose, 'Unavailable impersonate targets'),
                  'lean default build': (table[:3] + ['Chrome    -    curl_cffi (unavailable)'], verbose, 'Unavailable impersonate targets'),
@@ -1239,18 +1287,25 @@ class CurlEvidenceGuards(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, pattern):
                     source.check_capabilities(expected, lines, header)
 
-    def binding_log(self, archive, generated='build/temp.macosx-13.5-arm64-cpython-313/curl_cffi._wrapper.c', extra=''):
+    LIBS = ['-framework', 'Security', '-framework', 'CoreFoundation', '-lresolv', '-lc++', '-licucore']
+
+    def link_flags(self, archive):
+        return [f'-L{archive.parent}', *self.LIBS]
+
+    def binding_log(self, archive, generated='build/temp.macosx-13.5-arm64-cpython-313/curl_cffi._wrapper.c', extra='', flags=None):
         obj = 'build/temp.macosx-13.5-arm64-cpython-313'
+        flags = ' '.join(self.link_flags(archive) if flags is None else flags)
         return (f'  Using {archive.parent} to store libcurl-impersonate\n  libcurl-impersonate: {archive} already downloaded.\n'
                 f"  generating cffi module '{generated}'\n"
                 f'  /usr/bin/clang -O3 -Iinclude -c {generated} -o {obj}/{obj}/curl_cffi._wrapper.o\n'
                 f'  /usr/bin/clang -O3 -Iinclude -c ffi/shim.c -o {obj}/ffi/shim.o\n'
-                f'  /usr/bin/clang -bundle -undefined dynamic_lookup {obj}/{obj}/curl_cffi._wrapper.o {obj}/ffi/shim.o -o build/lib.macosx-13.5-arm64-cpython-313/curl_cffi/_wrapper.abi3.so '
-                f'-Wl,-force_load,{archive} -lc++\n{extra}')
+                f'  /usr/bin/clang -bundle -undefined dynamic_lookup -Wl,-S {obj}/{obj}/curl_cffi._wrapper.o {obj}/ffi/shim.o -o build/lib.macosx-13.5-arm64-cpython-313/curl_cffi/_wrapper.abi3.so '
+                f'-Wl,-force_load,{archive} {flags}\n{extra}')
 
     def test_binding_log_refuses_the_prebuilt_fallback(self):
         archive = self.tmp / 'release' / 'libcurl-impersonate.a'
-        compiles, link, generated, product = source.binding_log_facts(self.binding_log(archive), archive, 'curl_cffi/_wrapper.abi3.so')
+        flags = self.link_flags(archive)
+        compiles, link, generated, product = source.binding_log_facts(self.binding_log(archive), archive, 'curl_cffi/_wrapper.abi3.so', flags)
         self.assertEqual((len(compiles), generated, product.split('/')[-1]), (2, 'build/temp.macosx-13.5-arm64-cpython-313/curl_cffi._wrapper.c', '_wrapper.abi3.so'))
         vendor = self.tmp / 'tmplibdir' / 'libcurl-impersonate.a'
         cases = {
@@ -1261,11 +1316,80 @@ class CurlEvidenceGuards(unittest.TestCase):
             'no force_load': (self.binding_log(archive).replace(f'-Wl,-force_load,{archive}', '-lcurl-impersonate'), 'does not force-load'),
             'extra source': (self.binding_log(archive, extra='  /usr/bin/clang -c ffi/extra.c -o build/extra.o\n'), 'Expected two compiles'),
             'generated twice': (self.binding_log(archive).replace("generating cffi module", "generated elsewhere"), 'wrapper source was not found once'),
+            # curl_cffi 0.17 links the flags pkg-config resolves from the release pkg-config file.
+            'no pkg-config file': (self.binding_log(archive, extra=f'RuntimeError: Missing libcurl-impersonate.pc in {archive.parent}.\n'), 'pkg-config file or pkg-config'),
+            'no pkg-config': (self.binding_log(archive, extra='RuntimeError: Install pkg-config to build with static libcurl.\n'), 'pkg-config file or pkg-config'),
+            'unresolved flags': (self.binding_log(archive, flags=[]), 'does not use the resolved pkg-config flags'),
+            'foreign search path': (self.binding_log(archive, flags=['-L/opt/homebrew/lib', *self.LIBS]), 'does not use the resolved pkg-config flags'),
+            'missing system library': (self.binding_log(archive, flags=flags[:-1]), 'does not use the resolved pkg-config flags'),
         }
         for label, (text, pattern) in cases.items():
             with self.subTest(label):
                 with self.assertRaisesRegex(ValueError, pattern):
-                    source.binding_log_facts(text, archive, 'curl_cffi/_wrapper.abi3.so')
+                    source.binding_log_facts(text, archive, 'curl_cffi/_wrapper.abi3.so', flags)
+
+    def test_release_pkgconfig_must_be_the_pinned_template(self):
+        template = PC_TEMPLATE.decode()
+        libs = self.LIBS
+        good = template.replace('@CURL_VERSION@', '8.23.0-IMPERSONATE').replace('@CURL_SYSTEM_LIBS@', ' '.join(libs))
+        self.assertEqual(source.check_release_pkgconfig(good, template, '8.23.0-IMPERSONATE', libs), good)
+        cases = {'build search path': good.replace('-lresolv', '-L/private/build/deps/install/lib -lresolv'),
+                 'bundled archive by path': good.replace('-lresolv', '/private/build/deps/install/lib/libz.a -lresolv'),
+                 'absolute prefix': good.replace('prefix=${pcfiledir}', 'prefix=/Users/someone/release'),
+                 'other library': good.replace('-lc++', '-lc++ -lz'),
+                 'missing system library': good.replace(' -licucore', ''),
+                 'changed Libs': good.replace('Libs: -L${libdir} -lcurl-impersonate', 'Libs: -L${libdir} -lcurl'),
+                 'dropped static define': good.replace('Cflags.private: -DCURL_STATICLIB\n', ''),
+                 'other version': good.replace('8.23.0-IMPERSONATE', '8.21.0-IMPERSONATE'),
+                 'appended line': good + 'Requires.private: libssl\n'}
+        for label, text in cases.items():
+            with self.subTest(label):
+                with self.assertRaisesRegex(ValueError, 'differs from the pinned template'):
+                    source.check_release_pkgconfig(text, template, '8.23.0-IMPERSONATE', libs)
+        with self.assertRaisesRegex(ValueError, 'Unexpected release pkg-config template'):
+            source.check_release_pkgconfig(good, template + 'Requires: @EXTRA@\n', '8.23.0-IMPERSONATE', libs)
+
+    def test_resolved_link_flags(self):
+        release = self.tmp / 'release'
+        libs = ['-framework', 'Security', '-lresolv', '-lc++', '-lresolv', '-lm']
+        for printed in (libs, ['-framework', 'Security', '-lc++', '-lresolv', '-lm'], ['-framework', 'Security', '-lresolv', '-lc++', '-lm']):
+            with self.subTest(printed=printed):
+                text = ' '.join([f'-L{release}', '-lcurl-impersonate', *printed]) + '\n'
+                self.assertEqual(source.resolved_link_flags(text, release, libs), [f'-L{release}', *printed])
+        bad = {'other release': [f'-L{self.tmp}/other', '-lcurl-impersonate', *libs], 'no archive name': [f'-L{release}', *libs],
+               'host search path': [f'-L{release}', '-lcurl-impersonate', '-L/opt/homebrew/lib', *libs],
+               'extra library': [f'-L{release}', '-lcurl-impersonate', *libs, '-lz'], 'reordered': [f'-L{release}', '-lcurl-impersonate', *reversed(libs)]}
+        for label, tokens in bad.items():
+            with self.subTest(label):
+                with self.assertRaisesRegex(ValueError, 'pkg-config resolved other'):
+                    source.resolved_link_flags(' '.join(tokens), release, libs)
+
+    def test_tool_links_name_the_verified_product(self):
+        tools = self.tmp / 'tools'
+        (tools / 'pkgconf/bin').mkdir(parents=True)
+        product = tools / 'pkgconf/bin/pkgconf'
+        product.write_bytes(b'\xcf\xfa\xed\xfe pkgconf')
+        rows = {'pkgconf/bin/pkgconf': {'sha256': digest(product.read_bytes())}}
+        link = tools / 'pkgconf/bin/pkg-config'
+        link.symlink_to('pkgconf')
+        source.check_tool_link(tools, 'pkgconf/bin/pkg-config', 'pkgconf', rows)
+        with self.assertRaisesRegex(ValueError, 'must be a symlink to other'):
+            source.check_tool_link(tools, 'pkgconf/bin/pkg-config', 'other', rows)
+        with self.assertRaisesRegex(ValueError, 'does not resolve to the verified product'):
+            source.check_tool_link(tools, 'pkgconf/bin/pkg-config', 'pkgconf', {'pkgconf/bin/pkgconf': {'sha256': '00' * 32}})
+        link.unlink()
+        shutil.copyfile(product, link)
+        with self.assertRaisesRegex(ValueError, 'must be a symlink'):
+            source.check_tool_link(tools, 'pkgconf/bin/pkg-config', 'pkgconf', rows)
+        link.unlink()
+        (tools / 'host-pkg-config').write_bytes(b'host tool')
+        link.symlink_to('../../host-pkg-config')
+        with self.assertRaisesRegex(ValueError, 'must be a symlink to pkgconf'):
+            source.check_tool_link(tools, 'pkgconf/bin/pkg-config', 'pkgconf', rows)
+        link.unlink()
+        link.symlink_to('pkgconf')
+        with self.assertRaisesRegex(ValueError, 'does not name a verified product'):
+            source.check_tool_link(tools, 'pkgconf/bin/pkg-config', 'pkgconf', {})
 
     def test_fixture_refusals_must_be_certificate_errors(self):
         long = ("ERROR: [generic] watch: Unable to download webpage: Failed to perform, curl: (60) SSL certificate OpenSSL verify result: unable to get "
@@ -1366,7 +1490,7 @@ class CurlKitGuards(unittest.TestCase):
         (self.build / source.FINGERPRINTS).write_bytes(fingerprints)
         self.base = {'schema': source.RECEIPT_SCHEMA, 'status': 'built', 'plan_sha256': source.file_sha(self.plan), 'output': {'sha256': 'ab' * 32},
                      'closure': {'python': {'fingerprints': {'file': source.FINGERPRINTS, 'sha256': digest(fingerprints)}}},
-                     'impersonate': {'release': {'sha256': 'ef' * 32}},
+                     'impersonate': {'release': {'sha256': 'ef' * 32, 'pkgconfig': {'sha256': 'fe' * 32}}},
                      'curl_binding': {'replay': 'identical', 'generated_source': {'path': 'build/temp.macosx-13.5-arm64-cpython-313/curl_cffi._wrapper.c',
                                                                                  'sha256': digest(b'/* generated by cffi */\n')}}}
 
@@ -1392,6 +1516,7 @@ class CurlKitGuards(unittest.TestCase):
         self.assertIn('engine/distribution/yt-dlp-source/profile.json', names)  # the bundled tests load both profiles
         self.assertEqual(index['profile_file'], source.CURL_PROFILE_REL)
         for label, receipt in (('no binding proof', {k: v for k, v in self.base.items() if k != 'curl_binding'}),
+                               ('no release pkg-config proof', {**self.base, 'impersonate': {'release': {'sha256': 'ef' * 32}}}),
                                ('changed generated source', {**self.base, 'curl_binding': {**self.base['curl_binding'],
                                                              'generated_source': {**self.base['curl_binding']['generated_source'], 'sha256': '00' * 32}}})):
             with self.subTest(label):
