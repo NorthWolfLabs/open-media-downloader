@@ -65,8 +65,14 @@ The enclosed unmodified source archives contain FFmpeg 9.0.1, Opus 1.6.1,
 LAME 3.100 and zlib 1.3.1, including their copyright notices. Their respective
 licenses are included in licenses/. FFmpeg was configured without GPL
 components, network protocols, playback, or host-library autodetection. Its
-only video codecs are the JPEG and PNG still-picture decoders and encoders,
-which re-encode cover art; PNG uses zlib. The audio libraries and zlib are
+only video encoders are the JPEG and PNG still-picture encoders, which
+re-encode cover art; PNG uses zlib. Its only video decoders are those two and
+VP9, which reads the first frames of VP9 video so that a stream copy into MP4
+can record the stream's format; video is never transcoded. The VP9 decoder runs
+wherever such video is probed: in yt-dlp's merges, remuxes and probes and in
+OMD's verification. On every target build-media.py makes one recorded source
+adjustment so that every decoder's default limit is 132,710,400 pixels per
+frame instead of FFmpeg's INT_MAX. The audio libraries and zlib are
 statically linked; the source for all four libraries is included. zlib's
 in-memory compression files are compiled directly, as build-media.py lists.
 
@@ -80,7 +86,8 @@ compiler, source identities, configuration and output hashes from the original
 build. For a Linux cross build, install Zig 0.16.0 and pass the recorded target,
 for example --target x86_64-linux-musl --zig /path/to/zig. For Windows use
 --target x86_64-windows-gnu with the same pinned Zig version. The build script
-records and asserts any target-specific configure adjustments. A cross build requires
+records and asserts each source adjustment in build.json, including any
+target-specific configure adjustment. A cross build requires
 separate execution on its target; compilation alone does not verify it.
 Linux cross builds also require GNU/LLVM objcopy (binutils or llvm); use --objcopy
 to choose it. It removes Zig's bundled-libc DWARF from the shipping executables.

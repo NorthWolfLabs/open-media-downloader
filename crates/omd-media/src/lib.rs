@@ -702,30 +702,52 @@ pub fn tool_manifest_path(root: &Path) -> PathBuf {
     root.join("tools-v2.json")
 }
 
+/// A yt-dlp format filter that leaves out VP9 video (codec `vp09…` or `vp9…`).
+/// A format whose codec the extractor did not report still passes (`?`).
+const NOT_VP9: &str = "[vcodec!^=?vp09][vcodec!^=?vp9]";
 fn format_expression(recipe: Recipe, policy: &SelectionPolicy) -> Result<String, Problem> {
-    if policy.max_height > 8640 {
+    if policy.max_height > MAX_HEIGHT {
         return Err(issue(
             "quality_selection",
             "Choose a supported maximum resolution.",
             "prepare_again",
         ));
     }
-    let video = |height: &str| match recipe {
-        Recipe::Mp4 => format!("bv[ext=mp4]{height}+ba[ext=m4a]/b[ext=mp4]{height}"),
-        Recipe::Webm => format!("bv[ext=webm]{height}+ba[ext=webm]/b[ext=webm]{height}"),
-        _ => format!("bv{height}+ba/b{height}"),
+    let video = |filter: &str| match recipe {
+        Recipe::Mp4 => format!("bv[ext=mp4]{filter}+ba[ext=m4a]/b[ext=mp4]{filter}"),
+        Recipe::Webm => format!("bv[ext=webm]{filter}+ba[ext=webm]/b[ext=webm]{filter}"),
+        _ => format!("bv{filter}+ba/b{filter}"),
+    };
+    // Formats with a known height within the cap come first. Direct files
+    // often have no extractor dimensions; those are admitted only as a
+    // fallback, and `check_height_cap` enforces the cap on the saved output
+    // before anything is published.
+    let heights = match policy.max_height {
+        0 => vec![String::new()],
+        cap => vec![format!("[height<={cap}]"), format!("[height<=?{cap}]")],
+    };
+    // MP4 is the output that plays everywhere, and QuickTime and Photos do not
+    // play VP9 in MP4, so within each height group H.264, HEVC and AV1 video
+    // come before VP9. A known in-cap VP9 format still precedes any format of
+    // unknown height, whose saved height may exceed the cap and be rejected.
+    let codecs: &[&str] = if recipe == Recipe::Mp4 {
+        &[NOT_VP9, ""]
+    } else {
+        &[""]
+    };
+    let selection = || {
+        heights
+            .iter()
+            .flat_map(|height| {
+                codecs
+                    .iter()
+                    .map(move |codec| video(&format!("{codec}{height}")))
+            })
+            .collect::<Vec<_>>()
+            .join("/")
     };
     Ok(match recipe {
-        Recipe::Mp4 | Recipe::Webm | Recipe::Mkv if policy.max_height == 0 => video(""),
-        // Formats with a known height within the cap come first. Direct files
-        // often have no extractor dimensions; those are admitted only as a
-        // fallback, and `check_height_cap` enforces the cap on the saved
-        // output before anything is published.
-        Recipe::Mp4 | Recipe::Webm | Recipe::Mkv => format!(
-            "{}/{}",
-            video(&format!("[height<={}]", policy.max_height)),
-            video(&format!("[height<=?{}]", policy.max_height))
-        ),
+        Recipe::Mp4 | Recipe::Webm | Recipe::Mkv => selection(),
         Recipe::M4a => "ba[ext=m4a]/ba/b".into(),
         Recipe::Mp3 | Recipe::Opus => "ba/b".into(),
         _ => {
@@ -1286,7 +1308,7 @@ impl Media {
         let source = check_output(
             plan,
             expected,
-            &probe_output(probe, work, &name, cancel).await?,
+            &probe_output(probe, work, &name, probe_budget(plan.recipe), cancel).await?,
         )?;
         if !plan.recipe.audio_only() {
             return Ok(());
@@ -1431,7 +1453,7 @@ impl Rebuild<'_> {
         let streams = check_output(
             self.plan,
             self.expected,
-            &probe_output(self.probe, work, self.rebuilt, cancel).await?,
+            &probe_output(self.probe, work, self.rebuilt, MAX_PIXELS, cancel).await?,
         )?;
         match &streams[..] {
             [audio] if audio["codec_type"] == "audio" => Ok(()),
@@ -1508,9 +1530,10 @@ async fn run_probe(
     work: &Path,
     args: &[&str],
     name: &str,
+    pixels: &str,
     cancel: &CancellationToken,
 ) -> Result<Value, Problem> {
-    let bytes = run_probe_raw(probe, work, args, name, 1024 * 1024, cancel).await?;
+    let bytes = run_probe_raw(probe, work, args, name, 1024 * 1024, pixels, cancel).await?;
     serde_json::from_slice(&bytes).map_err(|_| {
         issue(
             "media_verification",
@@ -1519,44 +1542,65 @@ async fn run_probe(
         )
     })
 }
+/// Runs the confined ffprobe on `name` within the per-frame pixel budget
+/// `pixels` (`probe_budget`). Only a file that ffprobe positively rejects is
+/// `container_rejected` (`probe_result`); anything else stays retryable.
 async fn run_probe_raw(
     probe: &Tool,
     work: &Path,
     args: &[&str],
     name: &str,
     limit: usize,
+    pixels: &str,
     cancel: &CancellationToken,
 ) -> Result<Vec<u8>, Problem> {
-    run_probe_capture(probe, work, args, name, limit, cancel)
-        .await
-        .map_err(|_| probe_failed())
-}
-async fn run_probe_capture(
-    probe: &Tool,
-    work: &Path,
-    args: &[&str],
-    name: &str,
-    limit: usize,
-    cancel: &CancellationToken,
-) -> omd_isolation::Result<Vec<u8>> {
-    // The pixel budget applies to every decoder of the input, so a picture
-    // with absurd dimensions is never decoded (it would allocate gigabytes).
-    let args = ["-max_pixels", MAX_PIXELS]
+    // The pixel budget applies to every decoder of the input, so a frame or
+    // picture with absurd dimensions is never decoded (it would allocate
+    // gigabytes).
+    let args = ["-max_pixels", pixels]
         .iter()
         .chain(args)
         .map(|s| s.to_string())
         .chain(["-i".into(), name.into()])
         .collect::<Vec<_>>();
-    omd_isolation::run(
+    let captured = omd_isolation::capture(
         &helper_policy(probe, work),
         &args,
         vec![],
+        &BTreeMap::new(),
         limit,
         Duration::from_secs(60 * 60),
         cancel,
     )
     .await
+    .map_err(|_| probe_failed())?;
+    probe_result(captured)
 }
+/// ffprobe's result. Only when ffprobe ran, exited with its own failure status
+/// (1) and reported that the input is invalid data (FFmpeg's
+/// AVERROR_INVALIDDATA text) is the file itself rejected: the same bytes fail
+/// the same way on every attempt. A crash or kill, another status, or another
+/// error (a missing or unreadable file, a listing it could not write, a
+/// detached volume) may not recur, so it stays retryable.
+fn probe_result(captured: omd_isolation::Capture) -> Result<Vec<u8>, Problem> {
+    if captured.success {
+        return Ok(captured.stdout);
+    }
+    let rejected = captured.exit == omd_isolation::Exit::Code(1)
+        && captured
+            .stderr
+            .windows(INVALID_DATA.len())
+            .any(|window| window == INVALID_DATA);
+    Err(if rejected {
+        container_rejected()
+    } else {
+        probe_failed()
+    })
+}
+/// The message FFmpeg prints for AVERROR_INVALIDDATA when it cannot open or
+/// read an input as media.
+const INVALID_DATA: &[u8] = b"Invalid data found when processing input";
+/// The confined ffprobe could not run or finish; another attempt may succeed.
 fn probe_failed() -> Problem {
     issue(
         "media_verification",
@@ -1564,9 +1608,42 @@ fn probe_failed() -> Problem {
         "retry",
     )
 }
+/// The download completed, but its container or streams fail verification.
+/// The same selection produces the same bytes on every attempt, so retrying
+/// is not offered: preparing again lets a person choose another format.
+fn container_rejected() -> Problem {
+    output_rejected("OMD could not verify the downloaded media file, so it was not saved.")
+}
+fn output_rejected(reason: &str) -> Problem {
+    issue(
+        "media_verification",
+        &format!(
+            "{reason} Trying again would give the same result; prepare it again and choose another format."
+        ),
+        "prepare_again",
+    )
+}
 /// `container::MAX_PICTURE_SIDE` squared: the largest picture any managed
-/// decoder may decode during verification or a rebuild.
+/// decoder may decode while an audio output and its cover are verified or
+/// rebuilt.
 const MAX_PIXELS: &str = "16777216";
+/// The highest maximum resolution (`SelectionPolicy::max_height`) a selection
+/// may choose.
+const MAX_HEIGHT: u32 = 8640;
+/// The largest video frame a probe of a video output may decode: a 16:9 frame
+/// at `MAX_HEIGHT` (15360x8640), so a VP9 output within any accepted cap keeps
+/// its dimensions. The bundled FFmpeg is built with this as every decoder's
+/// default limit (`scripts/build-media.py`), which also bounds the decoding
+/// that yt-dlp's own FFmpeg and FFprobe runs do.
+const MAX_VIDEO_PIXELS: &str = "132710400";
+/// The pixel budget for probing an output of `recipe`.
+fn probe_budget(recipe: Recipe) -> &'static str {
+    if recipe.audio_only() {
+        MAX_PIXELS
+    } else {
+        MAX_VIDEO_PIXELS
+    }
+}
 /// One audio packet: its size and the 128-bit murmur3 hash of its bytes.
 type Packet = (u32, u128);
 /// The most audio packets one verification lists: about 290 hours of 44.1 kHz
@@ -1624,7 +1701,7 @@ async fn audio_packets(
         "-of",
         "csv=p=0",
     ]);
-    let count = run_probe_raw(probe, work, &count_args, name, 1024, cancel).await?;
+    let count = run_probe_raw(probe, work, &count_args, name, 1024, MAX_PIXELS, cancel).await?;
     let packets = std::str::from_utf8(&count)
         .ok()
         .and_then(|text| text.trim().parse::<u64>().ok())
@@ -1652,7 +1729,7 @@ async fn audio_packets(
         "-o",
         &listing.file,
     ]);
-    run_probe_raw(probe, work, &args, name, 1024, cancel).await?;
+    run_probe_raw(probe, work, &args, name, 1024, MAX_PIXELS, cancel).await?;
     let written = root
         .read_file(&listing.file)
         .and_then(|file| file.metadata())
@@ -1734,6 +1811,7 @@ async fn probe_output(
     probe: &Tool,
     work: &Path,
     name: &str,
+    pixels: &str,
     cancel: &CancellationToken,
 ) -> Result<Value, Problem> {
     run_probe(
@@ -1748,6 +1826,7 @@ async fn probe_output(
             "json",
         ],
         name,
+        pixels,
         cancel,
     )
     .await
@@ -1758,13 +1837,9 @@ fn check_output(
     expected: &MediaSelection,
     data: &Value,
 ) -> Result<Vec<Value>, Problem> {
-    let streams = data["streams"].as_array().ok_or_else(|| {
-        issue(
-            "media_verification",
-            "The output contains no media streams.",
-            "retry",
-        )
-    })?;
+    let streams = data["streams"]
+        .as_array()
+        .ok_or_else(|| output_rejected("The output contains no media streams."))?;
     let duration = data["format"]["duration"]
         .as_str()
         .and_then(|s| s.parse::<f64>().ok())
@@ -1876,7 +1951,8 @@ async fn source_tags(
         "-of",
         "json",
     ];
-    let Ok(bytes) = run_probe_capture(probe, work, &args, name, 1024 * 1024, cancel).await else {
+    let Ok(bytes) = run_probe_raw(probe, work, &args, name, 1024 * 1024, MAX_PIXELS, cancel).await
+    else {
         return vec![];
     };
     let Ok(data) = serde_json::from_slice::<Value>(&bytes) else {
@@ -2151,17 +2227,13 @@ fn check_streams(
         streams.iter().any(moving_video)
     };
     if !required {
-        return Err(issue(
-            "media_verification",
+        return Err(output_rejected(
             "The output is missing its required media stream.",
-            "retry",
         ));
     }
     if recipe.audio_only() && streams.iter().any(moving_video) {
-        return Err(issue(
-            "media_verification",
+        return Err(output_rejected(
             "The audio output unexpectedly contains video.",
-            "retry",
         ));
     }
     if recipe == Recipe::Webm
@@ -2549,6 +2621,14 @@ mod tests {
         }
         assert!(format_expression(Recipe::Cbz, &policy).is_err());
     }
+    fn parts(problem: Problem) -> (String, String, bool, Vec<String>) {
+        (
+            problem.code,
+            problem.message,
+            problem.retryable,
+            problem.actions,
+        )
+    }
     fn stream(codec_type: &str, codec_name: &str, attached_pic: u8, height: u64) -> Value {
         json!({"codec_type":codec_type,"codec_name":codec_name,"width":height,"height":height,
             "disposition":{"attached_pic":attached_pic}})
@@ -2586,16 +2666,19 @@ mod tests {
                     check_streams(recipe, &[stream("audio", "aac", 0, 0), video.clone()], None)
                         .unwrap_err();
                 assert_eq!(
-                    problem.message, "The audio output unexpectedly contains video.",
+                    parts(problem),
+                    parts(output_rejected(
+                        "The audio output unexpectedly contains video."
+                    )),
                     "{recipe:?} {video}"
                 );
             }
             // A picture alone is not an audio output.
             assert_eq!(
-                check_streams(recipe, &[stream("video", "png", 1, 500)], None)
-                    .unwrap_err()
-                    .message,
-                "The output is missing its required media stream."
+                parts(check_streams(recipe, &[stream("video", "png", 1, 500)], None).unwrap_err()),
+                parts(output_rejected(
+                    "The output is missing its required media stream."
+                ))
             );
         }
     }
@@ -2605,10 +2688,10 @@ mod tests {
         let audio = stream("audio", "aac", 0, 0);
         for recipe in [Recipe::Mp4, Recipe::Mkv] {
             assert_eq!(
-                check_streams(recipe, &[audio.clone(), cover.clone()], None)
-                    .unwrap_err()
-                    .message,
-                "The output is missing its required media stream."
+                parts(check_streams(recipe, &[audio.clone(), cover.clone()], None).unwrap_err()),
+                parts(output_rejected(
+                    "The output is missing its required media stream."
+                ))
             );
             // The selected height must come from the moving video.
             let video = stream("video", "h264", 0, 480);
@@ -2647,10 +2730,23 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(
-            format_expression(Recipe::Mp4, &capped).unwrap(),
-            "bv[ext=mp4][height<=720]+ba[ext=m4a]/b[ext=mp4][height<=720]/\
-             bv[ext=mp4][height<=?720]+ba[ext=m4a]/b[ext=mp4][height<=?720]"
+            format_expression(Recipe::Webm, &capped).unwrap(),
+            "bv[ext=webm][height<=720]+ba[ext=webm]/b[ext=webm][height<=720]/\
+             bv[ext=webm][height<=?720]+ba[ext=webm]/b[ext=webm][height<=?720]"
         );
+        // MP4 admits a format of unknown height only after every known one
+        // within the cap, VP9 included.
+        let mp4 = format_expression(Recipe::Mp4, &capped).unwrap();
+        let alternatives = mp4.split('/').collect::<Vec<_>>();
+        let last_known = alternatives
+            .iter()
+            .rposition(|a| a.contains("[height<=720]"))
+            .unwrap();
+        let first_unknown = alternatives
+            .iter()
+            .position(|a| a.contains("[height<=?720]"))
+            .unwrap();
+        assert!(last_known < first_unknown, "{mp4}");
         let open = SelectionPolicy {
             max_height: 0,
             ..Default::default()
@@ -2678,6 +2774,162 @@ mod tests {
         check_height_cap(Recipe::Mp4, &[audio.clone(), full.clone()], None, 0).unwrap();
         check_height_cap(Recipe::Mp4, &[audio.clone(), full.clone()], Some(1080), 720).unwrap();
         check_height_cap(Recipe::M4a, &[audio, cover], None, 720).unwrap();
+    }
+    /// A file that ffprobe ran on and rejected fails the same way on every
+    /// attempt, so it asks for a new preparation; a helper that could not run
+    /// or finish stays retryable.
+    #[test]
+    fn a_rejected_container_asks_for_another_format_instead_of_a_retry() {
+        use omd_isolation::Exit;
+        let invalid: &[u8] = b"[mov,mp4,m4a,3gp,3g2,mj2 @ 0x1] Empty VP Codec Configuration box\n\
+            [mov,mp4,m4a,3gp,3g2,mj2 @ 0x1] error reading header\n\
+            media.mp4: Invalid data found when processing input\n";
+        let capture = |exit: Exit, stderr: &[u8]| omd_isolation::Capture {
+            stdout: b"{}".to_vec(),
+            stderr: stderr.to_vec(),
+            success: exit == Exit::Code(0),
+            exit,
+        };
+        assert_eq!(probe_result(capture(Exit::Code(0), b"")).unwrap(), b"{}");
+        let rejected = probe_result(capture(Exit::Code(1), invalid)).unwrap_err();
+        assert_eq!(rejected.code, "media_verification");
+        assert!(!rejected.retryable);
+        assert_eq!(rejected.actions, ["prepare_again"]);
+        assert_eq!(
+            rejected.message,
+            "OMD could not verify the downloaded media file, so it was not saved. \
+             Trying again would give the same result; prepare it again and choose another format."
+        );
+        // Anything short of ffprobe's own rejection of the media may not
+        // recur: a crash or kill (directly, or as 128 plus the signal under
+        // the Linux guardian, or an NTSTATUS on Windows), another status, a
+        // missing or unreadable file, a listing it could not write, or a
+        // failure without a diagnostic.
+        for (exit, stderr) in [
+            (Exit::Signal(11), invalid),
+            (Exit::Signal(9), &b""[..]),
+            (Exit::Code(139), invalid),
+            (Exit::Code(-1073741819), invalid),
+            (Exit::Code(255), invalid),
+            (
+                Exit::Code(1),
+                &b"media.mp4: No such file or directory\n"[..],
+            ),
+            (Exit::Code(1), &b"media.mp4: Input/output error\n"[..]),
+            (Exit::Code(1), &b"media.mp4: Operation not permitted\n"[..]),
+            (
+                Exit::Code(1),
+                &b"Failed to open output file '.omd-packets-source.csv': No space left on device\n"
+                    [..],
+            ),
+            (Exit::Code(1), &b""[..]),
+        ] {
+            let transient = probe_result(capture(exit, stderr)).unwrap_err();
+            assert_eq!(transient.code, "media_verification", "{exit:?}");
+            assert!(
+                transient.retryable,
+                "{exit:?} {}",
+                String::from_utf8_lossy(stderr)
+            );
+            assert_eq!(transient.actions, ["retry"]);
+        }
+        // Stream checks of a completed download are just as deterministic.
+        let missing =
+            check_streams(Recipe::Mp4, &[stream("audio", "aac", 0, 0)], None).unwrap_err();
+        assert!(!missing.retryable && missing.actions == ["prepare_again"]);
+    }
+    /// MP4 is the recipe that plays everywhere: within each height group,
+    /// formats without VP9 come before VP9, and every format of known height
+    /// within the cap comes before any of unknown height. A source that offers
+    /// only VP9 in MP4 still yields a file.
+    #[test]
+    fn mp4_prefers_video_other_than_vp9_and_keeps_it_only_as_a_last_resort() {
+        let not_vp9 = "[vcodec!^=?vp09][vcodec!^=?vp9]";
+        let capped = SelectionPolicy {
+            max_height: 1080,
+            ..Default::default()
+        };
+        assert_eq!(
+            format_expression(Recipe::Mp4, &capped).unwrap(),
+            [
+                format!("bv[ext=mp4]{not_vp9}[height<=1080]+ba[ext=m4a]"),
+                format!("b[ext=mp4]{not_vp9}[height<=1080]"),
+                "bv[ext=mp4][height<=1080]+ba[ext=m4a]".into(),
+                "b[ext=mp4][height<=1080]".into(),
+                format!("bv[ext=mp4]{not_vp9}[height<=?1080]+ba[ext=m4a]"),
+                format!("b[ext=mp4]{not_vp9}[height<=?1080]"),
+                "bv[ext=mp4][height<=?1080]+ba[ext=m4a]".into(),
+                "b[ext=mp4][height<=?1080]".into(),
+            ]
+            .join("/")
+        );
+        let open = SelectionPolicy {
+            max_height: 0,
+            ..Default::default()
+        };
+        assert_eq!(
+            format_expression(Recipe::Mp4, &open).unwrap(),
+            format!(
+                "bv[ext=mp4]{not_vp9}+ba[ext=m4a]/b[ext=mp4]{not_vp9}/bv[ext=mp4]+ba[ext=m4a]/b[ext=mp4]"
+            )
+        );
+        // Every alternative keeps the MP4 container, and only MP4 leaves out
+        // VP9: WebM and MKV select as before.
+        for policy in [&capped, &open] {
+            let mp4 = format_expression(Recipe::Mp4, policy).unwrap();
+            assert!(mp4.split('/').all(|alternative| {
+                alternative
+                    .split('+')
+                    .all(|part| part.contains("[ext=mp4]") || part == "ba[ext=m4a]")
+            }));
+            for recipe in [Recipe::Webm, Recipe::Mkv] {
+                assert!(
+                    !format_expression(recipe, policy)
+                        .unwrap()
+                        .contains("vcodec")
+                );
+            }
+        }
+        // The filters negate a prefix match and admit an unreported codec.
+        assert!(not_vp9.contains("!^=?vp09") && not_vp9.contains("!^=?vp9]"));
+        assert_eq!(NOT_VP9, not_vp9);
+    }
+    /// A video output is probed with a pixel budget that fits a 16:9 frame at
+    /// the highest accepted cap, so an 8K or 16K VP9 frame keeps its
+    /// dimensions; audio outputs and their covers keep the 4096x4096 budget.
+    /// The bundled FFmpeg's built-in default is the same video budget.
+    #[test]
+    fn video_probes_fit_every_accepted_cap_and_audio_keeps_the_picture_budget() {
+        let video: u64 = MAX_VIDEO_PIXELS.parse().unwrap();
+        let height = u64::from(MAX_HEIGHT);
+        assert_eq!(video, height * height * 16 / 9);
+        assert_eq!(
+            video,
+            15360 * 8640,
+            "16K UHD; an 8K frame is a quarter of it"
+        );
+        assert!(
+            video <= i32::MAX as u64,
+            "FFmpeg's max_pixels is at most INT_MAX"
+        );
+        let side = u64::from(container::MAX_PICTURE_SIDE);
+        assert_eq!(MAX_PIXELS.parse::<u64>().unwrap(), side * side);
+        for recipe in [Recipe::Mp4, Recipe::Mkv, Recipe::Webm] {
+            assert_eq!(probe_budget(recipe), MAX_VIDEO_PIXELS);
+        }
+        for recipe in [Recipe::M4a, Recipe::Mp3, Recipe::Opus] {
+            assert_eq!(probe_budget(recipe), MAX_PIXELS);
+        }
+        // The highest cap is accepted; a higher one is not.
+        let policy = |max_height| SelectionPolicy {
+            max_height,
+            ..Default::default()
+        };
+        assert!(format_expression(Recipe::Mp4, &policy(MAX_HEIGHT)).is_ok());
+        assert!(format_expression(Recipe::Mp4, &policy(MAX_HEIGHT + 1)).is_err());
+        // The media build pins the same value as every decoder's default.
+        let build = include_str!("../../../scripts/build-media.py");
+        assert!(build.contains(&format!("VIDEO_PIXEL_BUDGET = {MAX_VIDEO_PIXELS}\n")));
     }
     #[test]
     fn only_plain_engine_tags_are_selected() {

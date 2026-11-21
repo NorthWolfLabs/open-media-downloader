@@ -79,16 +79,21 @@ pub struct Clients {
     /// of the last leases to expire) asked for downloads to finish. False
     /// until a client leaves, so an engine nobody attached to stops as before.
     last_finishes_downloads: bool,
+    /// When a client last attached, renewed its lease or detached. None until
+    /// the first client attaches.
+    pub last_activity: Option<tokio::time::Instant>,
 }
 impl Clients {
     pub fn attach(&mut self, id: String, finish_downloads: bool) {
+        let now = tokio::time::Instant::now();
         self.leases.insert(
             id,
             Lease {
-                seen: tokio::time::Instant::now(),
+                seen: now,
                 finish_downloads,
             },
         );
+        self.last_activity = Some(now);
     }
     /// Renews a lease that has not been pruned yet; false when it is unknown.
     pub fn renew(&mut self, id: &str) -> bool {
@@ -96,12 +101,19 @@ impl Clients {
             return false;
         };
         lease.seen = tokio::time::Instant::now();
+        self.last_activity = Some(lease.seen);
         true
     }
+    /// Records a client's departure. Leases that already expired are pruned
+    /// first: they ended before this departure, so they never decide what the
+    /// engine does after the last client leaves.
     pub fn detach(&mut self, id: &str) {
-        if let Some(lease) = self.leases.remove(id)
-            && self.leases.is_empty()
-        {
+        self.prune();
+        let Some(lease) = self.leases.remove(id) else {
+            return;
+        };
+        self.last_activity = Some(tokio::time::Instant::now());
+        if self.leases.is_empty() {
             self.last_finishes_downloads = lease.finish_downloads;
         }
     }
@@ -136,6 +148,23 @@ impl Clients {
     pub fn last_finishes_downloads(&self) -> bool {
         self.last_finishes_downloads
     }
+    /// How long ago a client last attached, renewed its lease or detached.
+    pub fn quiet_for(&self) -> Option<Duration> {
+        self.last_activity.map(|at| at.elapsed())
+    }
+    fn idle_check(&self) -> IdleCheck {
+        IdleCheck {
+            activity: self.last_activity,
+            finishes_downloads: self.last_finishes_downloads,
+        }
+    }
+}
+/// What an idle check saw of the clients when it found the engine due to
+/// stop. `confirm_idle_exit` stops only if nothing changed since.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdleCheck {
+    activity: Option<tokio::time::Instant>,
+    finishes_downloads: bool,
 }
 /// The macOS helper app that may hold the sign-in window, next to the engine.
 /// A bundle gives the window a proper application name and identity; a
@@ -162,23 +191,66 @@ pub fn sign_in_helper(engine: &std::path::Path) -> PathBuf {
 }
 /// How long a client lease lasts without a heartbeat.
 pub const CLIENT_LEASE: Duration = Duration::from_secs(45);
-/// How long a new engine waits for its first client before it may stop.
+/// How long a new engine waits for its first client before it may stop, and
+/// how long it stays after the last activity of a client that attached with
+/// `finish_downloads` once that client has left and nothing is left to download.
 pub const IDLE_GRACE: Duration = Duration::from_secs(60);
 /// Prunes expired client leases and reports whether an engine whose
 /// background operation is off should stop now. It keeps running while any
 /// client holds a lease and during its first minute. Once the last client has
 /// left, it stops unless that client attached with `finish_downloads` (the CLI
-/// and MCP server do): then it stays up while a download is queued or running
-/// and stops at the first check after the queue empties. A client that attaches
-/// without it (the desktop) still stops the engine, and its downloads, when it
-/// leaves.
+/// and MCP server do): then it stays up while a download is queued or running,
+/// and for the full idle grace after that client's last attach, heartbeat or
+/// detach, so separate `omd` commands keep reaching the same engine. It stops
+/// at the first check after both have passed. A client that attaches without
+/// it (the desktop) still stops the engine, and its downloads, when it leaves.
 pub async fn idle_exit_due(app: &App, uptime: Duration) -> bool {
+    idle_exit_check(app, uptime).await.is_some()
+}
+/// Stops an idle engine: `idle_exit_check`, then `confirm_idle_exit`. The
+/// lifecycle task calls this every few seconds.
+pub async fn stop_if_idle(app: &App, uptime: Duration) -> bool {
+    match idle_exit_check(app, uptime).await {
+        Some(check) => confirm_idle_exit(app, check).await,
+        None => false,
+    }
+}
+/// Under the client lock that attaching takes, confirms that no client
+/// attached, renewed its lease or left since `check`, then begins shutdown.
+/// A client that attached during the check keeps the engine running; one
+/// that attaches afterwards is refused with `engine_stopping`.
+pub async fn confirm_idle_exit(app: &App, check: IdleCheck) -> bool {
+    let mut clients = app.clients.lock().await;
+    clients.prune();
+    if !clients.is_empty() || clients.idle_check() != check {
+        return false;
+    }
+    app.shutdown.cancel();
+    true
+}
+/// `idle_exit_due`, returning what it saw of the clients when the engine is
+/// due to stop. Store and browser work happens without the client lock, so
+/// the decision is confirmed again before shutdown (`confirm_idle_exit`).
+pub async fn idle_exit_check(app: &App, uptime: Duration) -> Option<IdleCheck> {
     let mut clients = app.clients.lock().await;
     let live = clients.prune();
     let finish_downloads = clients.last_finishes_downloads();
+    let quiet = clients.quiet_for();
+    let check = clients.idle_check();
     drop(clients);
+    idle_exit_decision(app, uptime, &live, finish_downloads, quiet)
+        .await
+        .then_some(check)
+}
+async fn idle_exit_decision(
+    app: &App,
+    uptime: Duration,
+    live: &BTreeSet<String>,
+    finish_downloads: bool,
+    quiet: Option<Duration>,
+) -> bool {
     let empty = live.is_empty();
-    app.browser_sessions.prune(&live).await;
+    app.browser_sessions.prune(live).await;
     if !empty || uptime <= IDLE_GRACE {
         return false;
     }
@@ -198,6 +270,9 @@ pub async fn idle_exit_due(app: &App, uptime: Duration) -> bool {
         return true;
     }
     if !app.running.lock().await.is_empty() {
+        return false;
+    }
+    if quiet.is_some_and(|quiet| quiet <= IDLE_GRACE) {
         return false;
     }
     match app.store.has_unfinished_downloads().await {
@@ -1299,10 +1374,19 @@ async fn attach(
     Query(query): Query<contract::models::AttachQuery>,
 ) -> ApiResult<Value> {
     let id = omd_store::id("client");
-    app.clients
-        .lock()
-        .await
-        .attach(id.clone(), query.finish_downloads);
+    // An idle stop begins shutdown under this lock (`confirm_idle_exit`), so a
+    // client either attaches before that check and keeps the engine running,
+    // or is refused here instead of receiving a lease the engine won't honor.
+    let mut clients = app.clients.lock().await;
+    if app.shutdown.is_cancelled() {
+        return Err(problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "engine_stopping",
+            "The engine is stopping. Start it again, then retry.",
+        ));
+    }
+    clients.attach(id.clone(), query.finish_downloads);
+    drop(clients);
     Ok(Json(
         json!({"id":id,"heartbeat_seconds":15,"lease_seconds":CLIENT_LEASE.as_secs(),"finish_downloads":query.finish_downloads}),
     ))

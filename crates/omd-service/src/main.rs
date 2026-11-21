@@ -367,8 +367,7 @@ async fn run() -> anyhow::Result<()> {
         let started = tokio::time::Instant::now();
         loop {
             tokio::select! {_=lifecycle.shutdown.cancelled()=>break,_=tokio::time::sleep(std::time::Duration::from_secs(5))=>{}}
-            if omd_service::idle_exit_due(&lifecycle, started.elapsed()).await {
-                lifecycle.shutdown.cancel();
+            if omd_service::stop_if_idle(&lifecycle, started.elapsed()).await {
                 break;
             }
         }

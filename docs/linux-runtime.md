@@ -27,7 +27,7 @@ as your ordinary user. Profiles and downloads belong outside /opt/omd-engine.
 set -eu
 test ! -e /opt/omd-engine
 sudo install -d -m 0755 /opt/omd-engine
-sudo tar --extract --gzip --file OMD-Engine-0.2.3-linux-x64.tar.gz \
+sudo tar --extract --gzip --file OMD-Engine-0.2.4-linux-x64.tar.gz \
   --directory /opt/omd-engine --no-same-owner
 sudo chown -R root:root /opt/omd-engine
 sudo install -m 0644 omd-v2-engine.apparmor /etc/apparmor.d/omd-v2-engine

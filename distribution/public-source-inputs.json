@@ -1014,6 +1014,10 @@
       "destination": "scripts/test-sign-macos.py"
     },
     {
+      "source": "scripts/test-verify-media-build.py",
+      "destination": "scripts/test-verify-media-build.py"
+    },
+    {
       "source": "scripts/verify-media-build.py",
       "destination": "scripts/verify-media-build.py"
     },
@@ -1231,6 +1235,11 @@
       "source": "tests/fixtures/media/apple-he-aac-v2-3s.m4a",
       "destination": "tests/fixtures/media/apple-he-aac-v2-3s.m4a",
       "sha256": "5385427ccf86594b947c357b888c6032a0c29f5c580d3a1c581fb76ca422054f"
+    },
+    {
+      "source": "tests/fixtures/media/vp9-7680x4320-fragmented.mp4",
+      "destination": "tests/fixtures/media/vp9-7680x4320-fragmented.mp4",
+      "sha256": "814f14522d80a6004c69b5d0c550e11ba6e620ca51f811fd5943c5c988bbc3fd"
     },
     {
       "source": "tests/fixtures/v2-plan.json",

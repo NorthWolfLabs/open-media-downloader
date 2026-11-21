@@ -439,6 +439,33 @@ pub struct Capture {
     pub stdout: Vec<u8>,
     pub stderr: Vec<u8>,
     pub success: bool,
+    /// How the helper ended, so an adapter can tell the helper's own failure
+    /// status from a crash or a kill.
+    pub exit: Exit,
+}
+/// How a confined helper that ran to completion ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Exit {
+    /// The helper exited with this status code; 0 is success. Under the Linux
+    /// guardian a helper ended by a signal reports 128 plus the signal, and on
+    /// Windows a crash reports its NTSTATUS code.
+    Code(i32),
+    /// A signal ended the helper (Unix), as a crash or a kill does.
+    Signal(i32),
+}
+impl Exit {
+    pub fn of(status: std::process::ExitStatus) -> Self {
+        if let Some(code) = status.code() {
+            return Self::Code(code);
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            Self::Signal(status.signal().unwrap_or(0))
+        }
+        #[cfg(not(unix))]
+        Self::Signal(0)
+    }
 }
 pub async fn capture(
     policy: &Policy,
@@ -600,6 +627,7 @@ pub async fn capture_progress(
             stdout: bytes,
             stderr,
             success: status.success(),
+            exit: Exit::of(status),
         })
     };
     let result = tokio::select! {_=cancel.cancelled()=>Err(Error::Canceled),value=tokio::time::timeout(timeout,operation)=>value.unwrap_or(Err(Error::Budget))};
@@ -615,6 +643,26 @@ pub async fn capture_progress(
     result
 }
 
+#[cfg(all(test, unix))]
+mod exit_tests {
+    use super::Exit;
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::ExitStatus;
+    #[test]
+    fn an_exit_status_is_told_from_a_signal() {
+        assert_eq!(Exit::of(ExitStatus::from_raw(0)), Exit::Code(0));
+        assert_eq!(Exit::of(ExitStatus::from_raw(1 << 8)), Exit::Code(1));
+        assert_eq!(Exit::of(ExitStatus::from_raw(139 << 8)), Exit::Code(139));
+        assert_eq!(
+            Exit::of(ExitStatus::from_raw(libc::SIGSEGV)),
+            Exit::Signal(libc::SIGSEGV)
+        );
+        assert_eq!(
+            Exit::of(ExitStatus::from_raw(libc::SIGKILL)),
+            Exit::Signal(libc::SIGKILL)
+        );
+    }
+}
 #[cfg(test)]
 mod progress_snapshot_tests {
     use super::*;

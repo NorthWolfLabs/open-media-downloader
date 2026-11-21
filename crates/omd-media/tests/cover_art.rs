@@ -13,6 +13,10 @@
 //! tags and the video track at the byte level. A managed FFmpeg with the JPEG
 //! and PNG codecs keeps a re-encoded JPEG/PNG cover in MP3 and M4A; an older
 //! one without image codecs removes every cover (see `keeps_covers`).
+//!
+//! Video outputs are verified within the video pixel budget: an 8K VP9 copy
+//! into MP4 keeps its dimensions (`an_8k_vp9_copy_into_mp4_keeps_its_dimensions`,
+//! which needs managed tools with the VP9 decoder, OMD 0.2.4 and later).
 use omd_domain::{MediaSelection, Plan, Recipe};
 use omd_media::{Media, Tool, Tools};
 use serde_json::json;
@@ -85,6 +89,69 @@ fn plan(recipe: Recipe, tools: &Tools, duration_ms: u64) -> Plan {
         node_digest: tools.node.as_ref().map(|t| t.sha256.clone()),
     });
     plan
+}
+
+/// A synthetic 7680x4320 VP9 keyframe (1 s) in a fragmented MP4, as an HLS
+/// source delivers VP9 in MP4 (`tests/fixtures/media/README.md`).
+const VP9_8K_FRAGMENTED: &[u8] =
+    include_bytes!("../../../tests/fixtures/media/vp9-7680x4320-fragmented.mp4");
+/// The payload of the one `vpcC` box in an MP4, if there is one.
+fn vpcc(bytes: &[u8]) -> Option<&[u8]> {
+    let at = bytes.windows(4).position(|w| w == b"vpcC")?;
+    let size = u32::from_be_bytes(bytes.get(at - 4..at)?.try_into().ok()?) as usize;
+    bytes.get(at + 4..at - 4 + size)
+}
+/// The fixture is what the 8K test and the release media evidence assume: a
+/// fragmented MP4 with one 7680x4320 VP9 track and a complete vpcC box.
+#[test]
+fn the_8k_vp9_fixture_is_a_fragmented_mp4_with_a_complete_vpcc_box() {
+    let bytes = VP9_8K_FRAGMENTED;
+    assert_eq!(&bytes[4..8], b"ftyp");
+    assert!(bytes.windows(4).any(|w| w == b"moof"));
+    let entry = bytes.windows(4).position(|w| w == b"vp09").unwrap() + 4;
+    // VisualSampleEntry: 6 reserved, data reference index, 16 bytes of
+    // pre-defined and reserved fields, then width and height.
+    let side = |at: usize| u16::from_be_bytes([bytes[entry + at], bytes[entry + at + 1]]);
+    assert_eq!((side(24), side(26)), (7680, 4320));
+    let vpcc = vpcc(bytes).unwrap();
+    assert_eq!(vpcc.len(), 12);
+    assert_eq!(vpcc[0], 1, "vpcC version");
+    assert_eq!(vpcc[6] >> 4, 8, "8-bit");
+}
+/// The managed FFmpeg copies an 8K VP9 video into MP4 as yt-dlp's merger and
+/// remuxer do. The VP9 decoder reads the first frame within FFmpeg's built-in
+/// pixel limit, so the copy keeps a complete vpcC box, and verification probes
+/// within the video pixel budget, so the saved 7680x4320 video matches the
+/// confirmed height.
+#[tokio::test]
+#[ignore = "requires OMD_TEST_MEDIA_TOOLS (0.2.4 or later) and native helper confinement"]
+async fn an_8k_vp9_copy_into_mp4_keeps_its_dimensions() {
+    let (tools, ffmpeg) = manifest();
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("input.mp4"), VP9_8K_FRAGMENTED).unwrap();
+    let status = std::process::Command::new(&ffmpeg)
+        .current_dir(dir.path())
+        .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-y"])
+        .args(["-i", "input.mp4", "-map", "0", "-c", "copy"])
+        .args(["-movflags", "+faststart", "media.mp4"])
+        .status()
+        .unwrap();
+    assert!(
+        status.success(),
+        "managed FFmpeg could not copy VP9 into MP4"
+    );
+    let bytes = std::fs::read(dir.path().join("media.mp4")).unwrap();
+    assert_eq!(
+        vpcc(&bytes).map(<[u8]>::len),
+        Some(12),
+        "the copy needs the VP9 decoder to describe the stream"
+    );
+    let mut plan = plan(Recipe::Mp4, &tools, 1000);
+    plan.policy.max_height = 4320;
+    plan.media.as_mut().unwrap().selected_height = Some(4320);
+    let (result, saved) = verify_plan(&tools, &plan, &bytes).await;
+    result.unwrap();
+    assert_eq!(saved, bytes);
 }
 
 /// Mono 16-bit PCM with a square tone, for the managed FFmpeg's WAV demuxer.
@@ -905,10 +972,14 @@ async fn an_audio_output_with_a_real_video_track_is_still_rejected() {
     );
     let problem = verify(&tools, Recipe::M4a, &file).await.0.unwrap_err();
     assert_eq!(problem.code, "media_verification");
-    assert_eq!(
-        problem.message,
-        "The audio output unexpectedly contains video."
+    assert!(
+        problem
+            .message
+            .starts_with("The audio output unexpectedly contains video. "),
+        "{}",
+        problem.message
     );
+    assert!(!problem.retryable && problem.actions == ["prepare_again"]);
 }
 
 /// A live public podcast MP3 with embedded cover art, downloaded through the

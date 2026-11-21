@@ -256,7 +256,8 @@ reassembling.
   rebuild from the extracted kit in another directory reproduced every packed native
   (including `_wrapper.abi3.so`), CPython native, wheel and bootloader byte for byte. The
   executable still differed:
-  - `_sysconfigdata` records the build path;
+  - `_sysconfigdata` recorded the build path, which the build now remaps to
+    `logical_prefix` as the lean README describes;
   - pip's entry-point shebangs change three `RECORD` hashes;
   - the PKG-derived UUID and the signature follow from those changes.
 

@@ -9,6 +9,7 @@ prototype and verifies it. `kit` writes a deterministic source/rebuild kit and
 `verify-kit` checks one. Nothing here uses a signing identity, notarizes, publishes,
 promotes a prototype or accepts a release.
 """
+import ast
 import base64
 import gzip
 import hashlib
@@ -272,6 +273,9 @@ def load_profile(path):
     need(public_inputs.relative(profile['launcher']) and all(public_inputs.relative(lock[k]) for k in ('pyproject', 'lock', 'python_version_file')), 'Invalid profile paths')
     expected = profile['expected']
     need(expected.get('version') == profile['extractor']['version'] and type(expected.get('list_extractors_lines')) is int, 'Invalid expected values')
+    # CPython's _sysconfigdata is remapped to logical paths after make (neutral_sysconfigdata),
+    # so no packed member may keep a build path.
+    need(expected.get('build_path_members') == [], 'No packed member may record a build path: build_path_members must be empty')
     if is_v2(profile):
         check_v2_sections(profile, sdists)
     return profile
@@ -2167,6 +2171,7 @@ def build_steps(ctx, runner, record, save):
         log = runner.run(f'cpython-{index}', [substitute(a, ctx.values) for a in step], cpython_src, ctx.env())
         if step[:1] == ['make'] and len(step) == 2:
             record['cpython_modules'] = check_missing_modules(log.read_text(errors='replace'), profile['cpython']['allowed_missing_modules'], profile['cpython']['disabled_modules'])
+            record['cpython_sysconfig'] = neutral_sysconfigdata(cpython_src, logical_build_roots(ctx), host_patterns(ctx))
             record['cpython_generated'] = capture_generated(cpython_src, f'cpython-{index}')
     libpython = ctx.stage / 'lib' / 'libpython3.13.dylib'
     original = f'{ctx.prefix}/python/lib/libpython3.13.dylib'
@@ -2411,16 +2416,69 @@ def populate_npm_cache(ctx, runner, path):
         runner.run(f'npm-cache-{start // 50}', ['npm', 'cache', 'add', *files[start:start + 50]], ctx.tmp, ctx.env(npm_environment(ctx), path))
 
 
-def capture_generated(cpython_src, step):
-    """CPython's generated _sysconfigdata module, hashed straight after `make` in the build
-    directory named by pybuilddir.txt (Makefile target pybuilddir.txt runs
-    `python -m sysconfig --generate-posix-vars`). `make install` copies it unchanged."""
+def generated_sysconfigdata(cpython_src):
+    """The build directory named by pybuilddir.txt and the one _sysconfigdata module in it."""
     builddir = public_inputs.regular(cpython_src / 'pybuilddir.txt').read_text().strip()
     need(re.fullmatch(r'build/lib\.[A-Za-z0-9._-]+', builddir), 'Unexpected pybuilddir.txt')
     found = sorted((cpython_src / builddir).glob('_sysconfigdata_*.py'))
     need(len(found) == 1, 'Expected exactly one generated _sysconfigdata module')
-    return {found[0].name: {'generator': 'CPython Makefile target pybuilddir.txt: sysconfig --generate-posix-vars', 'step': step,
-                            'build_output': f'{builddir}/{found[0].name}', **identity(public_inputs.regular(found[0]))}}
+    return builddir, public_inputs.regular(found[0])
+
+
+def capture_generated(cpython_src, step):
+    """CPython's generated _sysconfigdata module, hashed straight after `make` in the build
+    directory named by pybuilddir.txt (Makefile target pybuilddir.txt runs
+    `python -m sysconfig --generate-posix-vars`) and the build-root remapping
+    (neutral_sysconfigdata). `make install` copies it unchanged."""
+    builddir, path = generated_sysconfigdata(cpython_src)
+    return {path.name: {'generator': 'CPython Makefile target pybuilddir.txt: sysconfig --generate-posix-vars; build roots remapped to the logical prefix',
+                        'step': step, 'build_output': f'{builddir}/{path.name}', **identity(path)}}
+
+
+def host_patterns(ctx):
+    """Byte patterns of this build's host directories that no shipped byte may contain."""
+    home = str(Path.home()).encode()
+    return {'build-root': str(ctx.output).encode(), 'sources': str(ctx.sources).encode(), 'engine': str(ctx.repo).encode(),
+            'home': home if len(home) > 1 else b'', 'homebrew': b'/opt/homebrew/'}
+
+
+def logical_build_roots(ctx):
+    """Host directories that CPython's configure arguments name, most specific first, with the
+    logical location each stands for: the staged install tree under DESTDIR is the profile's
+    logical prefix itself, and everything else in the work directory (the dependency prefix
+    and the extracted sources) is `<logical prefix>/build`."""
+    return [(str(ctx.root) + ctx.prefix, ctx.prefix), (str(ctx.work), ctx.prefix + '/build')]
+
+
+def neutral_sysconfigdata(cpython_src, roots, patterns):
+    """Rewrite the build-host directories in CPython's generated _sysconfigdata module to their
+    logical locations, straight after `make` and before `make install` copies it. The module
+    records configure arguments and build-tree variables (the OpenSSL prefix, dependency
+    include/library flags, the source tree), which the packaged interpreter never uses but
+    would otherwise ship. Only those directory strings change, and the build fails if any host
+    directory or host-path pattern remains."""
+    builddir, path = generated_sysconfigdata(cpython_src)
+    original = path.read_bytes()
+    text = original.decode('utf-8')
+    replacements = []
+    for host, logical in roots:
+        # A quote or backslash would be escaped in the generated literal and missed below.
+        need(os.path.isabs(host) and host.isprintable() and not set(host) & set('\'"\\'), f'Build directory cannot be remapped in {path.name}: {host}')
+        need(re.fullmatch(r'(/[a-z0-9][a-z0-9._-]*)+', logical) and not HOST_PATH.search(logical), f'Invalid logical location: {logical}')
+        replacements.append({'from': host, 'to': logical, 'count': text.count(host)})
+        text = text.replace(host, logical)
+    data = text.encode('utf-8')
+    found = scan(data, patterns)
+    need(not found and not HOST_PATH.search(text), f'{path.name} still names a host path after remapping: {found or "host path pattern"}')
+    try:
+        tree = ast.parse(data, path.name)
+    except SyntaxError:
+        raise Refused(f'{path.name} is not valid Python after remapping') from None
+    need(len(tree.body) == 1 and isinstance(tree.body[0], ast.Assign) and isinstance(tree.body[0].value, ast.Dict), f'Unexpected {path.name} layout')
+    if data != original:
+        path.write_bytes(data)
+    return {'module': path.name, 'build_output': f'{builddir}/{path.name}', 'generated_sha256': sha(original), 'sha256': sha(data),
+            'replacements': replacements}
 
 
 def sdist_index(archive, expected_sha256):
@@ -2540,9 +2598,7 @@ def closure_context(ctx, site_packages, record, extracted, wheel_files, bootload
                    ctx.env({'PYINSTALLER_CONFIG_DIR': str(config), 'PYTHONSAFEPATH': '1'}))
         return json.loads(public_inputs.regular(result_path).read_text())
 
-    home = str(Path.home()).encode()
-    patterns = {'build-root': str(ctx.output).encode(), 'sources': str(ctx.sources).encode(), 'engine': str(ctx.repo).encode(),
-                'home': home if len(home) > 1 else b'', 'homebrew': b'/opt/homebrew/'}
+    patterns = host_patterns(ctx)
     libpython = ctx.stage / 'lib' / 'libpython3.13.dylib'
     return {'profile': ctx.profile, 'natives': natives, 'data': data, 'patterns': patterns, 'records': records,
             'interpreter': {k: record['cpython'][k] for k in ('version', 'magic', 'cache_tag', 'extension_suffixes')},

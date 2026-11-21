@@ -161,6 +161,6 @@
       "yt_dlp_ejs/yt/solver/core.min.js": "18da6ce0758b416e7ae645084f4f8801f9f9d59d6c477c05eaa0ff94ebd8cc00",
       "yt_dlp_ejs/yt/solver/lib.min.js": "c55987fe697e5b9ee18830163f7af85327e9bb5c3e674b969d38c8d205eaa577"
     },
-    "build_path_members": ["_sysconfigdata__darwin_darwin"]
+    "build_path_members": []
   }
 }

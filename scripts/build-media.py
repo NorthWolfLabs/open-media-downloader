@@ -9,6 +9,10 @@ source archives and published executables are never overwritten.
 Besides audio, FFmpeg decodes and re-encodes still JPEG/PNG cover pictures so
 OMD can keep a verified cover in saved audio. PNG needs zlib's inflate and
 deflate; zlib is compiled from its pinned source into the same static prefix.
+Video is otherwise only stream-copied; the one video decoder beyond the cover
+codecs, VP9, exists so a copy into MP4 can describe the stream (see below).
+Every decoder's default per-frame pixel limit is VIDEO_PIXEL_BUDGET, the one
+source adjustment made for every target.
 """
 import argparse, hashlib, json, os, platform, shlex, shutil, struct, subprocess, tarfile, time
 from pathlib import Path
@@ -28,6 +32,43 @@ ZLIB_SOURCES = ("adler32", "compress", "crc32", "deflate", "infback", "inffast",
 # filter drops decoded ICC/EXIF side data, which the encoders would otherwise
 # write back verbatim; scale/format convert pixel layouts for the encoders.
 IMAGE_CODECS = "mjpeg,png"
+# Video decoders that only read stream parameters, never to transcode.
+# MP4 stores VP9 with a vpcC box that FFmpeg's MP4 muxer rebuilds from the
+# stream's pixel format. In FFmpeg 9.0.1 the vp9 parser derives only profile and
+# frame type, and the MP4 demuxer keeps only a vpcC box's colour fields, so the
+# pixel format is known only after the decoder reads the first frame while the
+# input is probed. Without it, copying VP9 video into MP4 writes an empty vpcC
+# box that no reader accepts. Matroska/WebM need no such box. The decoder
+# selects the vp9_superframe_split filter and the VP9 bitstream reader; the
+# muxers insert vp9_superframe themselves. Both filters are listed explicitly.
+# The decoder runs on untrusted video wherever an input is probed: in the
+# merges, remuxes, conversions and ffprobe calls that yt-dlp makes inside its
+# confinement (which can reach the engine's network broker), and in the
+# engine's own confined verification probes, which have no network.
+PROBE_VIDEO_DECODERS = "vp9"
+VP9_FILTERS = "vp9_superframe,vp9_superframe_split"
+# The largest frame any decoder decodes unless a caller passes a lower
+# -max_pixels: a 16:9 frame at the engine's highest maximum resolution (8640
+# rows), as omd-media's MAX_VIDEO_PIXELS. yt-dlp passes no -max_pixels to its
+# ffprobe calls and none to ffmpeg unless asked per postprocessor, so FFmpeg's
+# INT_MAX default is replaced in the source; that reaches every decoder in both
+# executables. The engine still passes 4096x4096 for audio and cover work.
+VIDEO_PIXEL_BUDGET = 132710400
+PIXEL_BUDGET_OPTION = '{"max_pixels", "Maximum number of pixels", OFFSET(max_pixels), AV_OPT_TYPE_INT64, {.i64 = %s }, 0, INT_MAX, A|V|S|D|E },'
+
+def adjust(source, path, before, after, reason, report):
+    """Replace one exact, recorded line of the extracted FFmpeg source."""
+    file=source/path
+    text=file.read_text()
+    if text.count(before)!=1: raise RuntimeError("The pinned FFmpeg source adjustment no longer matches: "+path)
+    file.write_text(text.replace(before,after))
+    report.setdefault("source_adjustments",[]).append({"path":"ffmpeg/"+path,"before":before,"after":after,"reason":reason})
+
+def pixel_default(help_text):
+    """The max_pixels default an FFmpeg executable's `-h full` reports."""
+    rows=[line for line in help_text.splitlines() if line.strip().startswith("-max_pixels ")]
+    if len(rows)!=1 or "(default " not in rows[0]: raise RuntimeError("FFmpeg does not report one max_pixels default")
+    return rows[0].rsplit("(default ",1)[1].rstrip(")").strip()
 
 def sha(path):
     with path.open("rb") as source: return hashlib.file_digest(source, "sha256").hexdigest()
@@ -141,18 +182,16 @@ def main():
         for pc in (prefix/"omd/lib/pkgconfig").glob("*.pc"):
             pc.write_text(pc.read_text().replace("prefix=/omd", "prefix=${pcfiledir}/../.."))
         source=output/"src/ffmpeg-9.0.1"
+        report["pixel_budget"]=VIDEO_PIXEL_BUDGET
+        adjust(source,"libavcodec/options_table.h",PIXEL_BUDGET_OPTION%"INT_MAX",PIXEL_BUDGET_OPTION%VIDEO_PIXEL_BUDGET,
+               "Every decoder's default per-frame pixel limit is the engine's video budget, including in yt-dlp's ffmpeg and ffprobe calls, which pass no -max_pixels; verified from -h full",report)
         if cross_windows:
             # This upstream switch works around GNU binutils dropping PE base
             # relocations. Zig uses LLD, retains them, and rejects this GNU alias.
             # Verify the actual PE relocation table and security flags below.
-            configure=source/"configure"
-            before="disabled debug && add_ldexeflags -Wl,--pic-executable,-e,mainCRTStartup"
-            after="disabled debug && add_ldexeflags -Wl,-e,mainCRTStartup"
-            text=configure.read_text()
-            if text.count(before)!=1: raise RuntimeError("The pinned FFmpeg linker adjustment no longer matches")
-            configure.write_text(text.replace(before,after))
-            report["source_adjustments"]=[{"path":"ffmpeg/configure","before":before,"after":after,"reason":"LLD already retains PE base relocations; output security flags and relocation directory are verified"}]
-        options=["./configure","--prefix=/omd","--disable-autodetect","--disable-network","--disable-doc","--disable-debug","--disable-shared","--enable-static","--disable-ffplay","--disable-everything","--enable-small","--enable-ffmpeg","--enable-ffprobe","--enable-libmp3lame","--enable-libopus","--enable-zlib","--enable-protocol=file,pipe","--enable-demuxer=mov,matroska,mp3,ogg,aac,wav,flac,mpegts,concat,webvtt,srt","--enable-muxer=mp4,matroska,webm,mp3,ogg,ipod,opus,srt,webvtt,ffmetadata,null","--enable-parser=aac,aac_latm,h264,hevc,vp8,vp9,av1,opus,mpegaudio,flac","--enable-decoder=aac,mp3,opus,vorbis,flac,pcm_s16le,webvtt,subrip,"+IMAGE_CODECS,"--enable-encoder=aac,libmp3lame,libopus,webvtt,subrip,"+IMAGE_CODECS,"--enable-filter=aresample,anull,atrim,aformat,null,format,scale,sidedata","--enable-bsf=aac_adtstoasc,extract_extradata,h264_mp4toannexb,vp9_superframe","--extra-cflags=-I../../prefix/omd/include","--extra-ldflags=-L../../prefix/omd/lib","--cc=../../toolchain/cc","--pkg-config=../../toolchain/pkg-config","--pkg-config-flags=--static"]
+            adjust(source,"configure","disabled debug && add_ldexeflags -Wl,--pic-executable,-e,mainCRTStartup","disabled debug && add_ldexeflags -Wl,-e,mainCRTStartup",
+                   "LLD already retains PE base relocations; output security flags and relocation directory are verified",report)
+        options=["./configure","--prefix=/omd","--disable-autodetect","--disable-network","--disable-doc","--disable-debug","--disable-shared","--enable-static","--disable-ffplay","--disable-everything","--enable-small","--enable-ffmpeg","--enable-ffprobe","--enable-libmp3lame","--enable-libopus","--enable-zlib","--enable-protocol=file,pipe","--enable-demuxer=mov,matroska,mp3,ogg,aac,wav,flac,mpegts,concat,webvtt,srt","--enable-muxer=mp4,matroska,webm,mp3,ogg,ipod,opus,srt,webvtt,ffmetadata,null","--enable-parser=aac,aac_latm,h264,hevc,vp8,vp9,av1,opus,mpegaudio,flac","--enable-decoder=aac,mp3,opus,vorbis,flac,pcm_s16le,webvtt,subrip,"+IMAGE_CODECS+","+PROBE_VIDEO_DECODERS,"--enable-encoder=aac,libmp3lame,libopus,webvtt,subrip,"+IMAGE_CODECS,"--enable-filter=aresample,anull,atrim,aformat,null,format,scale,sidedata","--enable-bsf=aac_adtstoasc,extract_extradata,h264_mp4toannexb,"+VP9_FILTERS,"--extra-cflags=-I../../prefix/omd/include","--extra-ldflags=-L../../prefix/omd/lib","--cc=../../toolchain/cc","--pkg-config=../../toolchain/pkg-config","--pkg-config-flags=--static"]
         if machine=="x86_64": options.append("--disable-x86asm")
         if cross_linux or cross_windows:
             options += ["--enable-cross-compile","--target-os="+("mingw32" if cross_windows else "linux"),"--arch="+machine,"--ar=../../toolchain/ar","--ranlib=../../toolchain/ranlib","--disable-stripping","--extra-ldflags=-static"]
@@ -194,11 +233,17 @@ def main():
         if not cross:
             protocols=subprocess.check_output([str(output/"bin/ffmpeg"),"-hide_banner","-protocols"],text=True)
             if set(protocols.split()) != {"Supported","file","protocols:","Input:","Output:","pipe"}: raise RuntimeError("Unexpected FFmpeg protocol: "+protocols)
-            for kind in ("decoders","encoders"):
+            for kind,expected in (("decoders",IMAGE_CODECS+","+PROBE_VIDEO_DECODERS),("encoders",IMAGE_CODECS)):
                 # Rows after the "------" legend separator: flags, name, description.
                 rows=subprocess.check_output([str(output/"bin/ffmpeg"),"-hide_banner","-"+kind],text=True).split("------\n",1)[1]
                 listed={line.split()[1] for line in rows.splitlines() if line.startswith(" V")}
-                if listed!=set(IMAGE_CODECS.split(",")): raise RuntimeError("Unexpected FFmpeg video "+kind+": "+" ".join(sorted(listed)))
+                if listed!=set(expected.split(",")): raise RuntimeError("Unexpected FFmpeg video "+kind+": "+" ".join(sorted(listed)))
+            filters=set(subprocess.check_output([str(output/"bin/ffmpeg"),"-hide_banner","-bsfs"],text=True).split())
+            if not set(VP9_FILTERS.split(","))<=filters: raise RuntimeError("FFmpeg lacks a VP9 bitstream filter: "+" ".join(sorted(filters)))
+            for name in ("ffmpeg","ffprobe"):
+                found=pixel_default(subprocess.check_output([str(output/"bin"/name),"-hide_banner","-h","full"],text=True,stderr=subprocess.DEVNULL))
+                if found!=str(VIDEO_PIXEL_BUDGET): raise RuntimeError(name+" max_pixels default is "+found)
+                report["outputs"][name]["max_pixels_default"]=VIDEO_PIXEL_BUDGET
         for license in source.glob("COPYING.*"): shutil.copyfile(license,output/"licenses"/("ffmpeg-"+license.name))
         report["status"]="built_requires_target_verification" if cross else "passed"
         save();print(json.dumps(report["outputs"],indent=2),flush=True)

@@ -24,6 +24,13 @@ download or by another output format of the same item. Names that differ only in
 letter case or Unicode form (such as a precomposed and a decomposed "é") count
 as the same name.
 
+MP4 video downloads prefer H.264, HEVC or AV1 video. They use VP9 video only when
+the source offers no other MP4 video known to fit the chosen maximum resolution,
+because many players, including QuickTime and Photos, do not play VP9 in MP4. WebM and MKV downloads can keep VP9 video.
+When OMD cannot verify a finished download's container or streams, it does
+not save the file. Trying again would fetch the same file, so OMD asks you to
+prepare the item again and choose another format.
+
 Audio downloads (MP3, M4A, Opus) contain one audio stream, a few plain-text tags
 and, for MP3 and M4A, at most one still cover picture. OMD chooses the source audio
 and converts it to the chosen format only when its codec and container differ; a
@@ -113,9 +120,11 @@ use stdin rather than secret command-line arguments.
 Each `omd` command holds a client lease only while it runs, and asks the
 engine to finish its downloads after it leaves. With background operation off,
 an engine that no client holds stops about a minute after it starts. When the
-last client to leave was the CLI or an MCP server, it first finishes every
-queued and running download: a download submitted from the CLI finishes, then
-the engine stops at its next check (within seconds). Downloads queued behind a
+last client to leave was the CLI or an MCP server, the engine stays for about a
+minute after that client left, so separate `omd` commands keep reaching the same
+engine, and it first finishes every queued and running download: a download
+submitted from the CLI finishes, then the engine stops at its next check (within
+seconds) once that minute has passed. Downloads queued behind a
 destination's storage operation, and paused or failed downloads, do not keep it
 running; they continue the next time the engine starts. When the desktop app is
 the last to leave, the engine stops without waiting, as quitting the app

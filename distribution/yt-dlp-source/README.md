@@ -148,16 +148,21 @@ are portable, with no host paths.
 - **Source provenance.** Archive-origin claims match immutable input archive bytes,
   including CPython `Lib/` and package sdists, rather than a post-build extraction tree.
   The launcher is bound separately. Generated `_sysconfigdata__darwin_darwin.py`
-  matches the output captured after CPython's `make`. EJS's generated `_version.py`
+  matches the output captured after CPython's `make` and the build-root remapping below. EJS's generated `_version.py`
   records its pinned vcs-versioning template, inputs, output and retained license.
   Any other packed source that is neither an immutable sdist member nor that reviewed
   generated output fails the build. Data members match a built wheel file, a CPython file or
   pip's install records, and the file PyInstaller recorded.
 - The CArchive layout (contiguous entries, pinned TOC serialization, cookie) is checked as
   the reviewed extractor checks it.
-- No build, source, engine or home path may appear in packed bytes except the declared
-  `expected.build_path_members`. That is CPython's `_sysconfigdata`, which records its
-  configure arguments.
+- No build, source, engine or home path may appear in packed bytes, and
+  `expected.build_path_members` must be empty. CPython's `_sysconfigdata` records its
+  configure arguments and build directories, so straight after `make` the build rewrites
+  them to logical paths: the staged install tree becomes `logical_prefix`
+  (`/opt/omd-ytdlp-source`) and the rest of the work directory (dependency prefix,
+  extracted sources) becomes `<logical_prefix>/build`. The receipt records each
+  replacement as `cpython_sysconfig`. The build fails if any host directory or host-path
+  pattern remains in that module, and again if any packed member names the build root.
 - A network-denied `sandbox-exec` smoke run with `--ignore-config --no-plugin-dirs` covers
   `--version`, `--list-extractors`, the `-v` header with no URL, and
   `--list-impersonate-targets`.
@@ -186,7 +191,7 @@ above, a public profile must also build `curl_cffi` impersonation from pinned so
 static closure proof replays PyInstaller with the host `install_name_tool` and `codesign`
 (recorded toolchain), and is separate from the runtime smoke. Bit-identical reproduction
 is not claimed: output bytes depend on the Xcode toolchain and on the absolute build
-directory, which CPython's `_sysconfigdata` records. The prototype makes no claim about
+directory, which pip's entry-point shebangs record in installed `RECORD` hashes. The prototype makes no claim about
 the upstream producer's undisclosed build inputs and claims no equivalence with that
 producer. Developer ID signing would need a reviewed adapter, because the existing
 extractor preparation pins the upstream universal2 bootloader digest.

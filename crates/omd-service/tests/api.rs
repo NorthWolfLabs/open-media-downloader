@@ -1272,11 +1272,15 @@ async fn only_a_client_that_asks_keeps_the_engine_up_for_downloads_after_it_leav
         .unwrap()
         .seen -= std::time::Duration::from_secs(1);
     assert!(due().await);
-    // Once the queue is empty, a CLI departure lets the engine stop too.
+    // Once the queue is empty, a CLI departure lets the engine stop too, after
+    // the idle grace that follows the command's last activity.
     let (command, _) = attach(Some("true")).await;
     call("POST", format!("/v2/jobs/{}/cancel", job.id)).await;
     detach(&command).await;
     assert!(!app.store.has_unfinished_downloads().await.unwrap());
+    assert!(!due().await);
+    app.clients.lock().await.last_activity =
+        Some(tokio::time::Instant::now() - std::time::Duration::from_secs(61));
     assert!(due().await);
     // Background operation keeps it up regardless.
     app.store
@@ -1284,6 +1288,207 @@ async fn only_a_client_that_asks_keeps_the_engine_up_for_downloads_after_it_leav
         .await
         .unwrap();
     assert!(!due().await);
+}
+
+/// With background operation off, the idle grace also follows each CLI or MCP
+/// departure, not only engine start: separate `omd` commands run minutes apart
+/// keep reaching the same engine, which stops about a minute after the last one
+/// leaves. A desktop that leaves last still stops it at once.
+#[tokio::test]
+async fn the_idle_grace_restarts_after_each_cli_command_but_not_after_the_desktop() {
+    let (_root, app) = setup().await;
+    let http = router(app.clone(), vec![]);
+    let call = async |method: &str, uri: String| {
+        let response = http
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .header("Authorization", "Bearer normal")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()
+    };
+    let attach = async |query: &str| {
+        call("POST", format!("/v2/clients{query}")).await["id"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let quiet = async |seconds: u64| {
+        app.clients.lock().await.last_activity =
+            Some(tokio::time::Instant::now() - std::time::Duration::from_secs(seconds));
+    };
+    // The engine started ten minutes ago; its startup grace is long over.
+    let uptime = std::time::Duration::from_secs(600);
+    let due = async || omd_service::idle_exit_due(&app, uptime).await;
+    assert!(app.clients.lock().await.quiet_for().is_none());
+    assert!(due().await, "an engine nobody attached to stops as before");
+    // A command with nothing to download: the engine stays for the grace.
+    let command = attach("?finish_downloads=true").await;
+    assert!(!due().await);
+    call("DELETE", format!("/v2/clients/{command}")).await;
+    assert!(app.clients.lock().await.quiet_for().unwrap() < omd_service::IDLE_GRACE);
+    assert!(!due().await);
+    quiet(59).await;
+    assert!(!due().await);
+    quiet(61).await;
+    assert!(due().await);
+    // The next command restarts the grace from its own departure, and its
+    // heartbeats count as activity while it runs.
+    let command = attach("?finish_downloads=true").await;
+    quiet(61).await;
+    assert!(!due().await, "a held lease keeps the engine up");
+    call("POST", format!("/v2/clients/{command}")).await;
+    assert!(app.clients.lock().await.quiet_for().unwrap() < omd_service::IDLE_GRACE);
+    call("DELETE", format!("/v2/clients/{command}")).await;
+    assert!(!due().await);
+    // A command that is killed without detaching: its lease expires 45 s after
+    // its last heartbeat, and the grace ends 60 s after that heartbeat.
+    let command = attach("?finish_downloads=true").await;
+    app.clients
+        .lock()
+        .await
+        .leases
+        .get_mut(&command)
+        .unwrap()
+        .seen = tokio::time::Instant::now() - std::time::Duration::from_secs(46);
+    quiet(46).await;
+    assert!(!due().await);
+    assert!(app.clients.lock().await.is_empty());
+    quiet(61).await;
+    assert!(due().await);
+    // An unknown or repeated detach is not activity.
+    call("DELETE", "/v2/clients/client_unknown".into()).await;
+    assert!(due().await);
+    // The desktop leaving last stops the engine without waiting, even right
+    // after a CLI command, as quitting the app intends.
+    let command = attach("?finish_downloads=true").await;
+    let desktop = attach("").await;
+    call("DELETE", format!("/v2/clients/{command}")).await;
+    call("DELETE", format!("/v2/clients/{desktop}")).await;
+    assert!(app.clients.lock().await.quiet_for().unwrap() < omd_service::IDLE_GRACE);
+    assert!(due().await);
+    // During its first minute an engine never stops, whoever left.
+    let command = attach("?finish_downloads=true").await;
+    call("DELETE", format!("/v2/clients/{command}")).await;
+    quiet(61).await;
+    assert!(!omd_service::idle_exit_due(&app, std::time::Duration::from_secs(30)).await);
+    assert!(due().await);
+}
+
+/// Departures and idle stops race safely. A CLI lease that expired before the
+/// desktop quit never decides for the desktop, even before it is pruned. A
+/// client that attaches while an idle stop is being decided keeps the engine
+/// running; one that attaches after the stop began is refused cleanly.
+#[tokio::test]
+async fn idle_exit_survives_expired_leases_and_late_attaches() {
+    let (root, app) = setup().await;
+    let http = router(app.clone(), vec![]);
+    let call = async |method: &str, uri: String| {
+        let response = http
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .header("Authorization", "Bearer normal")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        (
+            status,
+            serde_json::from_slice::<serde_json::Value>(&bytes).unwrap(),
+        )
+    };
+    let uptime = std::time::Duration::from_secs(600);
+    let ago = |seconds| tokio::time::Instant::now() - std::time::Duration::from_secs(seconds);
+    let plan: omd_domain::Plan =
+        serde_json::from_str(include_str!("../../../tests/fixtures/v2-plan.json")).unwrap();
+    let destination = app
+        .store
+        .add_destination("Files", root.path())
+        .await
+        .unwrap();
+    let (job, _) = app
+        .store
+        .enqueue(&plan, &destination.id, "queued", "queued", None)
+        .await
+        .unwrap();
+    // (a) A CLI's lease expired, unpruned, before the desktop quit with a
+    // download queued: the desktop left last, so the engine stops.
+    {
+        let mut clients = app.clients.lock().await;
+        clients.attach("client_cli".into(), true);
+        clients.attach("client_desktop".into(), false);
+        clients.leases.get_mut("client_cli").unwrap().seen = ago(46);
+        clients.detach("client_desktop");
+        assert!(clients.is_empty());
+        assert!(!clients.last_finishes_downloads());
+    }
+    assert!(omd_service::idle_exit_due(&app, uptime).await);
+    // (b) Nothing is queued now; a CLI command left over a minute ago.
+    call("POST", format!("/v2/jobs/{}/cancel", job.id)).await;
+    {
+        let mut clients = app.clients.lock().await;
+        clients.attach("client_cli".into(), true);
+        clients.detach("client_cli");
+        clients.last_activity = Some(ago(61));
+    }
+    // A client attaching while the stop is being decided keeps it running.
+    let check = omd_service::idle_exit_check(&app, uptime)
+        .await
+        .expect("idle");
+    let (status, lease) = call("POST", "/v2/clients?finish_downloads=true".into()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!omd_service::confirm_idle_exit(&app, check).await);
+    assert!(!app.shutdown.is_cancelled());
+    assert!(
+        omd_service::idle_exit_check(&app, uptime).await.is_none(),
+        "its lease keeps the engine up"
+    );
+    call(
+        "DELETE",
+        format!("/v2/clients/{}", lease["id"].as_str().unwrap()),
+    )
+    .await;
+    // So does a client that attaches and leaves again during the decision.
+    app.clients.lock().await.last_activity = Some(ago(61));
+    let check = omd_service::idle_exit_check(&app, uptime)
+        .await
+        .expect("idle");
+    let (status, desktop) = call("POST", "/v2/clients".into()).await;
+    assert_eq!(status, StatusCode::OK);
+    call(
+        "DELETE",
+        format!("/v2/clients/{}", desktop["id"].as_str().unwrap()),
+    )
+    .await;
+    assert!(!omd_service::confirm_idle_exit(&app, check).await);
+    assert!(!app.shutdown.is_cancelled());
+    // An unchanged decision begins shutdown under the client lock, and a
+    // client that attaches afterwards is refused without a lease.
+    app.clients.lock().await.last_activity = Some(ago(61));
+    assert!(omd_service::stop_if_idle(&app, uptime).await);
+    assert!(app.shutdown.is_cancelled());
+    let (status, refused) = call("POST", "/v2/clients?finish_downloads=true".into()).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(refused["code"], "engine_stopping");
+    assert!(app.clients.lock().await.is_empty());
 }
 
 #[tokio::test]

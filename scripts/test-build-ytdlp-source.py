@@ -389,6 +389,7 @@ class PlanGuards(unittest.TestCase):
             (lambda p: p.update(release_accepted=True), 'unaccepted prototype'),
             (lambda p: p.update(jobs=16), 'between 1 and 4'),
             (lambda p: p['inputs'][0].update(url='http://example.invalid/Python-3.13.14.tar.xz'), 'https'),
+            (lambda p: p['expected'].update(build_path_members=['_sysconfigdata__darwin_darwin']), 'build_path_members must be empty'),
         ]
         for mutate, pattern in cases:
             with self.subTest(pattern=pattern):
@@ -397,6 +398,68 @@ class PlanGuards(unittest.TestCase):
                 path = Path(self.dir.name) / 'profile.json'
                 path.write_text(json.dumps(profile))
                 self.refused(pattern, source.load_profile, path)
+
+    def test_sysconfigdata_build_roots_are_remapped_to_the_logical_prefix(self):
+        import ast
+        from types import SimpleNamespace
+        tmp = Path(self.dir.name).resolve()
+        out = tmp / 'build output'  # a space, as on an external volume
+        ctx = SimpleNamespace(root=out / 'work' / 'root', work=out / 'work', prefix=REAL_CURL_PROFILE['logical_prefix'])
+        self.assertEqual(ctx.prefix, '/opt/omd-ytdlp-source')
+        roots = source.logical_build_roots(ctx)
+        self.assertEqual(roots, [(f'{out}/work/root/opt/omd-ytdlp-source', '/opt/omd-ytdlp-source'), (f'{out}/work', '/opt/omd-ytdlp-source/build')])
+        patterns = {'build-root': str(out).encode(), 'sources': str(tmp / 'sources').encode(), 'engine': str(tmp / 'engine').encode(), 'homebrew': b'/opt/homebrew/'}
+        src = tmp / 'Python-3.13.14'
+        builddir = src / 'build' / 'lib.macosx-13.5-arm64-3.13'
+        builddir.mkdir(parents=True)
+        (src / 'pybuilddir.txt').write_text('build/lib.macosx-13.5-arm64-3.13')
+        module = builddir / '_sysconfigdata__darwin_darwin.py'
+        values = {
+            'CONFIG_ARGS': f"'--prefix=/opt/omd-ytdlp-source/python' '--with-openssl={out}/work/root/opt/omd-ytdlp-source/openssl' "
+                           f"'LIBLZMA_CFLAGS=-I{out}/work/deps/include' 'LIBLZMA_LIBS=-L{out}/work/deps/lib -llzma'",
+            'OPENSSL_INCLUDES': f'-I{out}/work/root/opt/omd-ytdlp-source/openssl/include',
+            'abs_builddir': f'{out}/work/src/cpython/Python-3.13.14',
+            'COVERAGE_REPORT': f'{out}/work/src/cpython/Python-3.13.14/lcov-report',
+            'prefix': '/opt/omd-ytdlp-source/python',
+            'Py_ENABLE_SHARED': 1,
+        }
+        generated = f'# system configuration generated and used by the sysconfig module\nbuild_time_vars = {values!r}\n'
+        module.write_text(generated)
+        self.assertEqual(source.scan(generated.encode(), patterns), ['build-root'])
+        result = source.neutral_sysconfigdata(src, roots, patterns)
+        self.assertEqual([r['count'] for r in result['replacements']], [2, 4])
+        self.assertEqual((result['module'], result['build_output']), (module.name, f'build/lib.macosx-13.5-arm64-3.13/{module.name}'))
+        self.assertEqual(result['generated_sha256'], digest(generated.encode()))
+        remapped = module.read_bytes()
+        self.assertEqual(result['sha256'], digest(remapped))
+        self.assertEqual(source.scan(remapped, patterns), [])
+        self.assertIsNone(source.HOST_PATH.search(remapped.decode()))
+        found = ast.literal_eval(remapped.decode().split('build_time_vars = ', 1)[1])
+        self.assertEqual(found, {
+            'CONFIG_ARGS': "'--prefix=/opt/omd-ytdlp-source/python' '--with-openssl=/opt/omd-ytdlp-source/openssl' "
+                           "'LIBLZMA_CFLAGS=-I/opt/omd-ytdlp-source/build/deps/include' 'LIBLZMA_LIBS=-L/opt/omd-ytdlp-source/build/deps/lib -llzma'",
+            'OPENSSL_INCLUDES': '-I/opt/omd-ytdlp-source/openssl/include',
+            'abs_builddir': '/opt/omd-ytdlp-source/build/src/cpython/Python-3.13.14',
+            'COVERAGE_REPORT': '/opt/omd-ytdlp-source/build/src/cpython/Python-3.13.14/lcov-report',
+            'prefix': '/opt/omd-ytdlp-source/python',
+            'Py_ENABLE_SHARED': 1,
+        })
+        # The captured generated output is the remapped module, which make install copies.
+        captured = source.capture_generated(src, 'cpython-1')[module.name]
+        self.assertEqual(captured['sha256'], result['sha256'])
+        # Already neutral: nothing changes.
+        again = source.neutral_sysconfigdata(src, roots, patterns)
+        self.assertEqual(([r['count'] for r in again['replacements']], again['sha256']), ([0, 0], result['sha256']))
+        # Any other host directory left behind fails the build.
+        for leftover in (f"'LIBFFI_CFLAGS': '-I{tmp / 'sources'}/include'", f"'X': '{out}/logs'", "'X': '/Users/someone/lib'"):
+            with self.subTest(leftover=leftover):
+                module.write_text(generated.replace("'prefix'", leftover + ", 'prefix'"))
+                self.refused('still names a host path after remapping', source.neutral_sysconfigdata, src, roots, patterns)
+        module.write_text(generated)
+        self.refused('cannot be remapped', source.neutral_sysconfigdata, src, [(f"{out}/it's", '/opt/omd-ytdlp-source/build')], patterns)
+        self.refused('Invalid logical location', source.neutral_sysconfigdata, src, [(str(out / 'work'), '/Users/build')], patterns)
+        module.write_text('import os\n')
+        self.refused('Unexpected _sysconfigdata__darwin_darwin.py layout', source.neutral_sysconfigdata, src, roots, patterns)
 
     def test_stale_plan_and_unsafe_outputs(self):
         plan = self.fx.plan()
@@ -1098,6 +1161,11 @@ class CurlPlanGuards(unittest.TestCase):
             source.make_plan(self.fx.repo, self.fx.sources, source.CURL_PROFILE_REL)
             self.fx.write_source('zlib-1.3.1.tar.gz', b'prebuilt or tampered')
             self.plan_refused('Input digest or size mismatch')
+
+    def test_shipped_profiles_allow_no_packed_build_path(self):
+        for profile in (REAL_PROFILE, REAL_CURL_PROFILE):
+            self.assertEqual(profile['expected']['build_path_members'], [])
+            self.assertEqual(profile['logical_prefix'], '/opt/omd-ytdlp-source')
 
     def test_profile_refuses_prebuilt_and_unsafe_curl_inputs(self):
         vendor = {'id': 'curl:vendor', 'kind': 'curl-dep', 'role': 'shipped-source', 'package': 'libcurl-impersonate', 'version': '2.0.0',

@@ -28,6 +28,7 @@ uv run scripts/test-manual-updates.py
 uv run scripts/test-package-runtime.py
 uv run scripts/test-public-distribution.py
 uv run scripts/test-build-public-engine.py
+uv run scripts/test-verify-media-build.py
 ```
 
 Set OMD_PLUGIN_WORKER to the absolute matching worker executable before SDK fixture

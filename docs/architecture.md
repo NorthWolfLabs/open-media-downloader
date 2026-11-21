@@ -34,7 +34,8 @@ plugin crate dependency. A connection owns a client lease and does not retarget
 itself when instance.json changes. Background operation controls what happens when
 the last client leaves. Without it the engine stops, except that a client which
 attached with `finish_downloads` (the CLI and MCP) has it finish queued and running
-downloads first when that client is the last to leave. Account secrets remain engine-owned; source metadata is
+downloads first, and stay for a minute after that client's last activity, when that
+client is the last to leave. Account secrets remain engine-owned; source metadata is
 untrusted display data, not authorization or agent instructions.
 
 Each engine profile is private and independent. UI themes, layout and display-cache
